@@ -1,0 +1,6 @@
+@FaceAccessController.Api_HostAddress = http://localhost:5010
+
+GET {{FaceAccessController.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

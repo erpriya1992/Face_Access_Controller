@@ -1,0 +1,42 @@
+<section class="page-card">
+  <h2>Live Transactions</h2>
+  <div class="status-row">
+    <span>Device Status:</span>
+    <span class="status-badge" [class.online]="deviceStatus === 'Online'" [class.offline]="deviceStatus === 'Offline'" [class.checking]="deviceStatus === 'Checking'">
+      {{ deviceStatus }}
+    </span>
+    <span class="last-check" *ngIf="lastDeviceCheck">Last check: {{ lastDeviceCheck }}</span>
+  </div>
+  <p>{{ message }}</p>
+  <div class="filters">
+    <label>
+      <span>Start DateTime</span>
+      <input [(ngModel)]="startDateTime" type="datetime-local" />
+    </label>
+    <label>
+      <span>End DateTime</span>
+      <input [(ngModel)]="endDateTime" type="datetime-local" />
+    </label>
+  </div>
+  <div class="actions">
+    <button (click)="syncTransactions(true)">Sync From Device</button>
+    <button (click)="loadTransactions()">Refresh</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Photo</th><th>Person ID</th><th>Name</th><th>Time</th><th>Device</th></tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let t of transactions">
+        <td>
+          <img *ngIf="t.photo" [src]="'data:image/jpeg;base64,' + t.photo" alt="person photo" class="avatar" />
+          <div *ngIf="!t.photo" class="avatar placeholder">NA</div>
+        </td>
+        <td>{{ t.personId }}</td>
+        <td>{{ t.name || 'Unknown' }}</td>
+        <td>{{ t.transactionTime }}</td>
+        <td>{{ t.deviceSn }}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>

@@ -1,0 +1,266 @@
+<section class="device-shell">
+  <header class="device-hero">
+    <div class="device-hero__accent" aria-hidden="true"></div>
+    <div class="device-hero__main">
+      <p class="device-eyebrow">Administration</p>
+      <h1>Face controller registration</h1>
+      <p class="device-lead">
+        Register a face reader with site details, controller behaviour, and recognition options. Probe the terminal,
+        then save. Settings can be pushed to the device when a password is supplied.
+      </p>
+    </div>
+  </header>
+
+  <div class="panel panel--form">
+    <div class="form-head">
+      <h2>{{ editingId == null ? 'Add controller' : 'Edit controller' }}</h2>
+      <div class="tab-row" role="tablist">
+        <button type="button" class="tab-btn" [class.active]="activeTab === 'details'" (click)="activeTab = 'details'">Details</button>
+        <button type="button" class="tab-btn" [class.active]="activeTab === 'network'" (click)="activeTab = 'network'">Network</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="activeTab === 'details'">
+      <fieldset class="form-section">
+        <legend>General</legend>
+        <div class="form-grid form-grid--3">
+          <label>
+            <span>Device name *</span>
+            <input type="text" [(ngModel)]="form.name" name="name" maxlength="30" placeholder="Max 30 characters" />
+          </label>
+          <label>
+            <span>Description *</span>
+            <input type="text" [(ngModel)]="form.description" name="description" placeholder="Device description" />
+          </label>
+          <label>
+            <span>Site control *</span>
+            <select [(ngModel)]="form.settings.siteControl" name="siteControl">
+              <option *ngFor="let s of siteControlOptions" [value]="s">{{ s }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Unit no *</span>
+            <input type="number" [(ngModel)]="form.settings.unitNo" name="unitNo" min="1" />
+          </label>
+          <label>
+            <span>IP address *</span>
+            <input type="text" [(ngModel)]="form.deviceIp" name="deviceIp" placeholder="192.168.1.100:8090" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" [(ngModel)]="form.devicePassword" name="devicePassword" autocomplete="new-password" />
+          </label>
+          <label>
+            <span>Direction</span>
+            <select [(ngModel)]="form.settings.direction" name="direction">
+              <option *ngFor="let d of directionOptions" [value]="d">{{ d }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Sort order</span>
+            <input type="number" [(ngModel)]="form.sortOrder" name="sortOrder" min="0" />
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.settings.defaultEnrollerFingerprintOrFace" name="defaultEnroller" />
+            <span>Default enroller: fingerprint or face</span>
+          </label>
+          <label class="checkbox-field" *ngIf="editingId != null">
+            <input type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
+            <span>Active (shown in user enrollment)</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Time zone</legend>
+        <div class="form-grid form-grid--3">
+          <label>
+            <span>Device time zone</span>
+            <select [(ngModel)]="form.settings.timeZone" name="timeZone">
+              <option *ngFor="let tz of timeZoneOptions" [value]="tz">{{ tz }}</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Controller configuration</legend>
+        <div class="form-grid form-grid--3">
+          <label>
+            <span>Release time (ms)</span>
+            <input type="number" [(ngModel)]="form.settings.releaseTimeMs" name="releaseTimeMs" min="0" />
+          </label>
+          <label>
+            <span>Recognition score</span>
+            <input type="number" [(ngModel)]="form.settings.recognitionScore" name="recognitionScore" min="0" max="100" />
+          </label>
+          <label>
+            <span>Stranger threshold</span>
+            <select [(ngModel)]="form.settings.strangerThreshold" name="strangerThreshold">
+              <option *ngFor="let t of strangerThresholdOptions" [value]="t">{{ t }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Voice mode</span>
+            <select [(ngModel)]="form.settings.voiceMode" name="voiceMode">
+              <option *ngFor="let o of voiceModeOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Display mode</span>
+            <select [(ngModel)]="form.settings.displayMode" name="displayMode">
+              <option *ngFor="let o of displayModeOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Multi-face detection</span>
+            <select [(ngModel)]="form.settings.multiFaceDetection" name="multiFaceDetection">
+              <option *ngFor="let o of multiFaceOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Stranger voice mode</span>
+            <select [(ngModel)]="form.settings.strangerVoiceMode" name="strangerVoiceMode">
+              <option *ngFor="let o of strangerVoiceOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Display customization</span>
+            <input type="text" [(ngModel)]="form.settings.displayCustomization" name="displayCustomization" />
+          </label>
+          <label>
+            <span>Wiegand output</span>
+            <select [(ngModel)]="form.settings.wiegandOutput" name="wiegandOutput">
+              <option *ngFor="let o of wiegandOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.settings.strangerDetection" name="strangerDetection" />
+            <span>Stranger detection</span>
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.settings.livenessEnabled" name="livenessEnabled" />
+            <span>Liveness</span>
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.settings.enableTransaction" name="enableTransaction" />
+            <span>Enable transaction</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Recognition mode</legend>
+        <div class="form-grid form-grid--3">
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.settings.enableFaceRecognitionInterval" name="enableInterval" />
+            <span>Enable face recognition interval</span>
+          </label>
+          <label>
+            <span>Interval (ms)</span>
+            <input type="number" [(ngModel)]="form.settings.faceRecognitionIntervalMs" name="faceInterval" min="0" />
+          </label>
+          <label>
+            <span>QR verification mode</span>
+            <select [(ngModel)]="form.settings.qrVerificationMode" name="qrVerificationMode">
+              <option *ngFor="let o of qrModeOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Photo display</span>
+            <select [(ngModel)]="form.settings.photoDisplay" name="photoDisplay">
+              <option *ngFor="let o of photoDisplayOptions" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+    </ng-container>
+
+    <ng-container *ngIf="activeTab === 'network'">
+      <fieldset class="form-section">
+        <legend>Network</legend>
+        <div class="form-grid form-grid--2">
+          <label>
+            <span>Device IP / URL *</span>
+            <input type="text" [(ngModel)]="form.deviceIp" name="deviceIpNetwork" placeholder="192.168.1.100:8090" />
+          </label>
+          <label>
+            <span>Dest IP</span>
+            <input type="text" [(ngModel)]="form.settings.destIp" name="destIp" placeholder="192.168.1.34" />
+          </label>
+        </div>
+        <p class="hint">Dest IP is stored for your site records. Network push to the terminal uses the device IP above.</p>
+      </fieldset>
+    </ng-container>
+
+    <label class="checkbox-field push-flag">
+      <input type="checkbox" [(ngModel)]="form.settings.pushConfigToDevice" name="pushConfig" />
+      <span>Push controller settings to terminal on save (requires device password)</span>
+    </label>
+
+    <div class="probe-box" *ngIf="probeResult as p">
+      <span class="probe-chip" [class.probe-chip--ok]="p.reachable" [class.probe-chip--bad]="!p.reachable">
+        {{ p.reachable ? 'Reachable' : 'Unreachable' }}
+      </span>
+      <p class="probe-detail" *ngIf="p.deviceKey">Device key: {{ p.deviceKey }}</p>
+      <p class="probe-detail probe-detail--err" *ngIf="!p.reachable && p.detail">{{ p.detail }}</p>
+    </div>
+
+    <p class="message" *ngIf="message" [attr.data-tone]="messageTone">{{ message }}</p>
+
+    <div class="form-actions">
+      <button type="button" class="btn secondary" (click)="probeDevice()" [disabled]="probing || !form.deviceIp.trim()">
+        {{ probing ? 'Probing…' : 'Probe terminal' }}
+      </button>
+      <button type="button" class="btn primary" (click)="saveDevice()" [disabled]="saving || !form.name.trim() || !form.deviceIp.trim()">
+        {{ saving ? 'Saving…' : editingId == null ? 'Register device' : 'Save changes' }}
+      </button>
+      <button type="button" class="btn ghost" *ngIf="editingId != null" (click)="cancelEdit()" [disabled]="saving">Cancel</button>
+    </div>
+  </div>
+
+  <div class="toolbar toolbar--card">
+    <span class="toolbar-title">Registered devices ({{ devices.length }})</span>
+    <button type="button" class="btn secondary" (click)="loadDevices()" [disabled]="loading">Refresh</button>
+  </div>
+
+  <p class="loading" *ngIf="loading">Loading devices…</p>
+
+  <div class="panel panel--table" *ngIf="!loading">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Site</th>
+            <th>IP</th>
+            <th>Direction</th>
+            <th>Order</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let d of devices; let i = index" [class.row-alt]="i % 2 === 1">
+            <td>{{ d.name }}</td>
+            <td class="cell-muted">{{ d.siteControl?.trim() ? d.siteControl : '—' }}</td>
+            <td class="cell-mono">{{ d.deviceIp }}</td>
+            <td>{{ d.direction }}</td>
+            <td>{{ d.sortOrder }}</td>
+            <td>
+              <span class="badge" [class.badge--ok]="d.isActive" [class.badge--blocked]="!d.isActive">
+                {{ d.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </td>
+            <td class="cell-actions">
+              <button type="button" class="btn secondary btn--compact" (click)="startEdit(d)">Edit</button>
+            </td>
+          </tr>
+          <tr *ngIf="devices.length === 0">
+            <td colspan="7" class="empty">No devices registered yet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

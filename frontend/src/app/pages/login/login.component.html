@@ -1,0 +1,203 @@
+<main class="login-page">
+  <section class="login-brand" aria-labelledby="brand-heading">
+    <div class="login-brand__pattern" aria-hidden="true"></div>
+    <div class="login-brand__accent" aria-hidden="true"></div>
+
+    <div class="login-brand__inner">
+      <p class="login-eyebrow">Enterprise access management</p>
+      <h2 id="brand-heading" class="visually-hidden">Axstrack Face Access Controller</h2>
+
+      <div class="brand-lockup">
+        <div class="brand-lockup__mark-wrap brand-lockup__mark-wrap--logo">
+          <div class="logo-axstrack">
+            <img
+              class="logo-axstrack__img"
+              src="assets/brand/axstrack-logo.png"
+              width="64"
+              height="64"
+              alt="" />
+            <span class="logo-axstrack__shimmer" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="brand-lockup__text">
+          <span class="brand-lockup__name">Axstrack</span>
+          <span class="brand-lockup__product">Face Access Controller</span>
+        </div>
+      </div>
+
+      <figure class="login-art">
+        <div class="login-art__frame">
+          <!-- Inline SVG: always renders; face + reader + wireless (no external fetch) -->
+          <svg
+            class="login-art__svg"
+            viewBox="0 0 392 200"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            aria-hidden="true">
+            <defs>
+              <linearGradient id="loginStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color: #e8d5a8" />
+                <stop offset="100%" style="stop-color: #f0ead8" />
+              </linearGradient>
+            </defs>
+            <!-- Back: scan waves (sit in the gap → reader on the right) -->
+            <g class="login-signal" transform="translate(52,-8)" stroke-linecap="round" fill="none">
+              <path
+                class="login-signal__arc login-signal__arc--6"
+                d="M266 50c30 30 30 72 0 98"
+                stroke="rgba(255,255,255,0.7)"
+                stroke-width="2.05" />
+              <path
+                class="login-signal__arc login-signal__arc--5"
+                d="M261 57c26 26 26 62 0 84"
+                stroke="rgba(245,240,228,0.75)"
+                stroke-width="1.92" />
+              <path
+                class="login-signal__arc login-signal__arc--4"
+                d="M257 65c21 21 21 51 0 70"
+                stroke="rgba(232,213,168,0.8)"
+                stroke-width="1.8" />
+              <path
+                class="login-signal__arc login-signal__arc--3"
+                d="M252 72c17 17 17 41 0 56"
+                stroke="rgba(255,255,255,0.72)"
+                stroke-width="1.68" />
+              <path
+                class="login-signal__arc login-signal__arc--2"
+                d="M247 79c13 13 13 30 0 42"
+                stroke="rgba(240,234,216,0.85)"
+                stroke-width="1.56" />
+              <path
+                class="login-signal__arc login-signal__arc--1"
+                d="M243 87c8 8 8 20 0 28"
+                stroke="rgba(232,213,168,0.9)"
+                stroke-width="1.44" />
+              <path
+                class="login-signal__arc login-signal__arc--0"
+                d="M238 94c4 4 4 9 0 14"
+                stroke="rgba(250,245,230,0.95)"
+                stroke-width="1.32" />
+              <circle class="login-signal__core" cx="238" cy="100" r="4.25" fill="rgba(232,213,168,0.98)" stroke="none" />
+            </g>
+            <!-- Mid: person (left), so the terminal can read as the focal object on the right -->
+            <g transform="translate(-12,0)">
+              <path
+                d="M72 168V98c0-30 24-54 54-54s54 24 54 54v70"
+                stroke="rgba(255,255,255,0.55)"
+                stroke-width="1.35"
+                stroke-linecap="round"
+                stroke-linejoin="round" />
+              <path d="M126 72c-10 0-18 8-16 18" stroke="rgba(255,255,255,0.4)" stroke-width="1" stroke-linecap="round" />
+              <path d="M148 88h14" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-linecap="round" />
+              <path d="M40 168h168" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-linecap="round" />
+            </g>
+            <!-- Front: face reader — larger, anchored on the right (client-facing “product” side) -->
+            <rect
+              x="294"
+              y="108"
+              width="96"
+              height="72"
+              rx="10"
+              fill="rgba(255,255,255,0.05)"
+              stroke="url(#loginStroke)"
+              stroke-width="1.85"
+              opacity="0.98" />
+            <rect
+              x="311"
+              y="125"
+              width="62"
+              height="38"
+              rx="6"
+              fill="rgba(8,14,32,0.4)"
+              stroke="rgba(255,255,255,0.48)"
+              stroke-width="1.15" />
+            <ellipse
+              cx="342"
+              cy="144"
+              rx="12"
+              ry="14"
+              fill="none"
+              stroke="rgba(232,213,168,0.9)"
+              stroke-width="1.1" />
+            <path
+              d="M317.5 141h3.8M327 141h3.8"
+              stroke="rgba(232,213,168,0.8)"
+              stroke-width="1.05"
+              stroke-linecap="round" />
+            <path
+              d="M318.5 151.5c2.4 2.4 7 2.4 9.2 0"
+              stroke="rgba(232,213,168,0.75)"
+              stroke-width="1"
+              stroke-linecap="round"
+              fill="none" />
+            <circle
+              class="login-reader-led"
+              cx="342"
+              cy="108"
+              r="3.25"
+              fill="#34d399"
+              stroke="rgba(255,255,255,0.5)"
+              stroke-width="0.8" />
+          </svg>
+        </div>
+        <figcaption class="login-art__caption">
+          Register staff on the <strong>face reader</strong> from this console: templates sync to your terminal over the LAN, with live attendance and audit reporting.
+        </figcaption>
+      </figure>
+
+      <ul class="login-points">
+        <li>
+          <span class="login-points__glyph" aria-hidden="true"></span>
+          User provisioning aligned to your face reader device
+        </li>
+        <li>
+          <span class="login-points__glyph" aria-hidden="true"></span>
+          Real-time gate transactions and scheduled reports
+        </li>
+        <li>
+          <span class="login-points__glyph" aria-hidden="true"></span>
+          Middleware bridge between this portal and the reader firmware
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="login-form-wrap" aria-labelledby="login-heading">
+    <div class="login-card">
+      <div class="login-card__brand-mobile">
+        <div class="brand-lockup__mark-wrap brand-lockup__mark-wrap--sm brand-lockup__mark-wrap--logo">
+          <div class="logo-axstrack logo-axstrack--sm">
+            <img class="logo-axstrack__img" src="assets/brand/axstrack-logo.png" width="48" height="48" alt="" />
+            <span class="logo-axstrack__shimmer" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div>
+          <span class="login-card__brand-name">Axstrack</span>
+          <span class="login-card__brand-sub">Face Access</span>
+        </div>
+      </div>
+
+      <p class="login-card__eyebrow">Operator sign-in</p>
+      <h1 id="login-heading" class="login-title">Welcome back</h1>
+      <p class="login-lead">Authenticate to manage face reader enrollment, live access, and reports.</p>
+
+      <label class="field">
+        <span class="field__label">Username</span>
+        <input [(ngModel)]="username" type="text" autocomplete="username" placeholder="Enter username" />
+      </label>
+      <label class="field">
+        <span class="field__label">Password</span>
+        <input [(ngModel)]="password" type="password" autocomplete="current-password" placeholder="Enter password" />
+      </label>
+
+      <button type="button" class="btn-signin" (click)="login()" [disabled]="loading">
+        <span class="btn-signin__loader" *ngIf="loading" aria-hidden="true"></span>
+        {{ loading ? 'Signing in…' : 'Sign in to console' }}
+      </button>
+
+      <p class="login-msg" [class.login-msg--error]="message.startsWith('Login failed')" role="status">{{ message }}</p>
+
+      <p class="login-foot">Axstrack · Face Access Controller · Confidential use</p>
+    </div>
+  </section>
+</main>

@@ -1,0 +1,100 @@
+.page-card {
+  background: #fff;
+  border: 1px solid #e3e8f2;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.status-badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 600;
+}
+
+.status-badge.online {
+  background: #e7f9ee;
+  color: #1f8a45;
+}
+
+.status-badge.offline {
+  background: #ffecec;
+  color: #c13232;
+}
+
+.status-badge.checking {
+  background: #eef3ff;
+  color: #355fc1;
+}
+
+.last-check {
+  color: #6a7596;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #516187;
+}
+
+input {
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid #d4def2;
+}
+
+button {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  color: #fff;
+  background: #2457d6;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #e3e8f2;
+  padding: 8px;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #d8e2f8;
+}
+
+.avatar.placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #6b7798;
+  background: #f2f5fc;
+}

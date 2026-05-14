@@ -1,0 +1,111 @@
+<section class="settings-shell">
+  <header class="settings-hero">
+    <div class="settings-hero__accent" aria-hidden="true"></div>
+    <div class="settings-hero__main">
+      <p class="settings-eyebrow">Administration</p>
+      <h1>Settings</h1>
+      <p class="settings-lead">
+        View everyone enrolled in this application. Use <strong>Door access</strong> to allow normal entry or block someone who has left
+        the organization or should not open the door. Changes are saved here and pushed to the face terminal when the person exists on the
+        device.
+      </p>
+    </div>
+  </header>
+
+  <div class="toolbar toolbar--card">
+    <label class="search-field">
+      <span class="sr-only">Search</span>
+      <input type="search" [(ngModel)]="searchText" placeholder="Search by person ID, name, or department…" />
+    </label>
+    <div class="filter-seg" role="group" aria-label="Filter by access">
+      <button type="button" class="seg-btn" [class.active]="accessFilter === 'all'" (click)="accessFilter = 'all'">All</button>
+      <button type="button" class="seg-btn" [class.active]="accessFilter === 'allowed'" (click)="accessFilter = 'allowed'">
+        Door allowed
+      </button>
+      <button type="button" class="seg-btn" [class.active]="accessFilter === 'blocked'" (click)="accessFilter = 'blocked'">Blocked</button>
+    </div>
+    <div class="toolbar-actions">
+      <button type="button" class="btn secondary" (click)="loadEmployees()" [disabled]="loading">Refresh</button>
+    </div>
+  </div>
+
+  <div class="stat-strip" *ngIf="!loading && employees.length > 0">
+    <div class="stat-tile">
+      <span class="stat-tile__value">{{ counts().total }}</span>
+      <span class="stat-tile__label">Enrolled users</span>
+    </div>
+    <div class="stat-tile stat-tile--ok">
+      <span class="stat-tile__value">{{ counts().allowed }}</span>
+      <span class="stat-tile__label">Door allowed</span>
+    </div>
+    <div class="stat-tile stat-tile--warn">
+      <span class="stat-tile__value">{{ counts().blocked }}</span>
+      <span class="stat-tile__label">Blocked</span>
+    </div>
+  </div>
+
+  <p class="message" *ngIf="message">{{ message }}</p>
+  <p class="loading" *ngIf="loading">Loading enrolled users…</p>
+
+  <div class="panel panel--settings" *ngIf="!loading">
+    <div class="table-wrap table-wrap--elevated">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Person ID</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Face reader</th>
+            <th>Phone</th>
+            <th>Enrolled</th>
+            <th>Door access</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filteredRows(); let i = index" [class.row-alt]="i % 2 === 1">
+            <td class="cell-id"><span class="id-pill">{{ r.personId }}</span></td>
+            <td>{{ r.fullName.trim() ? r.fullName : '—' }}</td>
+            <td class="cell-muted">{{ r.department?.trim() ? r.department : '—' }}</td>
+            <td class="cell-muted">{{ r.faceDeviceName?.trim() ? r.faceDeviceName : '—' }}</td>
+            <td class="cell-muted">{{ r.phone?.trim() ? r.phone : '—' }}</td>
+            <td class="cell-muted">{{ formatCreated(r.createdAt) }}</td>
+            <td class="cell-access">
+              <ng-container *ngIf="savingPersonId !== r.personId">
+                <div class="access-cell">
+                  <span class="badge" [class.badge--ok]="r.doorAccessAllowed" [class.badge--blocked]="!r.doorAccessAllowed">
+                    {{ r.doorAccessAllowed ? 'Allowed' : 'Blocked' }}
+                  </span>
+                  <div class="access-actions">
+                    <button
+                      type="button"
+                      class="btn secondary btn--compact"
+                      [disabled]="r.doorAccessAllowed"
+                      (click)="setAccess(r, true)"
+                      title="Restore door access on terminal (face permission)">
+                      Allow
+                    </button>
+                    <button
+                      type="button"
+                      class="btn secondary btn--compact btn--danger"
+                      [disabled]="!r.doorAccessAllowed"
+                      (click)="setAccess(r, false)"
+                      title="Block door access (e.g. left organization)">
+                      Block
+                    </button>
+                  </div>
+                </div>
+              </ng-container>
+              <span *ngIf="savingPersonId === r.personId" class="saving-label">Saving…</span>
+            </td>
+          </tr>
+          <tr *ngIf="filteredRows().length === 0">
+            <td colspan="7" class="empty">
+              <span *ngIf="employees.length === 0">No enrolled users yet. Use User registration to add people.</span>
+              <span *ngIf="employees.length > 0">No rows match your search or filter.</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

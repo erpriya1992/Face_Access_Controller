@@ -1,0 +1,214 @@
+<section class="reg-page" aria-labelledby="reg-page-title">
+  <div class="reg-main">
+    <header class="reg-page-header">
+      <h1 id="reg-page-title" class="reg-page-title">Employee registration</h1>
+      <p class="reg-page-subtitle">
+        Enter employee details, capture a face image, and submit when the gateway and terminal show online.
+      </p>
+    </header>
+
+    <section class="reg-card reg-card--status" aria-labelledby="status-heading">
+      <div class="reg-card__headrow">
+        <div>
+          <h2 id="status-heading" class="reg-card__h">Device status</h2>
+          <p class="reg-card__sub">Both lines must read <strong>Online</strong> before registration is allowed.</p>
+        </div>
+        <button type="button" class="btn-refresh" (click)="loadDeviceStatus()" [disabled]="statusLoading">
+          <span class="btn-refresh__ic" *ngIf="statusLoading" aria-hidden="true"></span>
+          {{ statusLoading ? 'Refreshing…' : 'Refresh status' }}
+        </button>
+      </div>
+
+      <div class="reg-connectivity__grid" *ngIf="deviceStatus as s">
+        <div class="reg-node" [class.reg-node--ok]="s.middlewareOnline" [class.reg-node--bad]="!s.middlewareOnline">
+          <div class="reg-node__row">
+            <span class="reg-node__glyph" [class.reg-node__glyph--ok]="s.middlewareOnline" [class.reg-node__glyph--bad]="!s.middlewareOnline" aria-hidden="true"></span>
+            <div class="reg-node__text">
+              <span class="reg-node__label">Gateway host</span>
+              <span class="reg-node__hintline">Person and face API endpoint</span>
+            </div>
+            <span class="reg-chip" [class.reg-chip--ok]="s.middlewareOnline" [class.reg-chip--bad]="!s.middlewareOnline">
+              {{ s.middlewareOnline ? 'Online' : 'Offline' }}
+            </span>
+          </div>
+          <p class="reg-node__url">{{ s.middlewareUrl }}</p>
+          <p class="reg-node__err" *ngIf="!s.middlewareOnline && s.middlewareDetail">{{ s.middlewareDetail }}</p>
+        </div>
+        <div class="reg-node" [class.reg-node--ok]="s.deviceOnline" [class.reg-node--bad]="!s.deviceOnline">
+          <div class="reg-node__row">
+            <span class="reg-node__glyph" [class.reg-node__glyph--ok]="s.deviceOnline" [class.reg-node__glyph--bad]="!s.deviceOnline" aria-hidden="true"></span>
+            <div class="reg-node__text">
+              <span class="reg-node__label">Access terminal</span>
+              <span class="reg-node__hintline">LAN device address</span>
+            </div>
+            <span class="reg-chip" [class.reg-chip--ok]="s.deviceOnline" [class.reg-chip--bad]="!s.deviceOnline">
+              {{ s.deviceOnline ? 'Online' : 'Offline' }}
+            </span>
+          </div>
+          <p class="reg-node__url">{{ s.faceDeviceTarget }}</p>
+          <p class="reg-node__err" *ngIf="s.middlewareOnline && !s.deviceOnline && s.deviceDetail">{{ s.deviceDetail }}</p>
+        </div>
+      </div>
+
+      <div class="reg-skeleton" *ngIf="!deviceStatus && statusLoading">
+        <div class="reg-skeleton__pulse"></div>
+        <p class="reg-skeleton__txt">Querying gateway and terminal…</p>
+      </div>
+
+      <p class="reg-meta" *ngIf="deviceStatus">Last status poll: {{ formatStatusTime(deviceStatus.checkedAtUtc) }}</p>
+    </section>
+
+    <div
+      class="reg-modal"
+      *ngIf="duplicateDialog as dlg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dup-dialog-title"
+      (click)="closeDuplicateDialog()">
+      <div class="reg-modal__panel" (click)="$event.stopPropagation()">
+        <h2 id="dup-dialog-title" class="reg-modal__title">{{ dlg.title }}</h2>
+        <p class="reg-modal__body">{{ dlg.body }}</p>
+        <div class="reg-modal__actions">
+          <button type="button" class="btn primary" (click)="closeDuplicateDialog()">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="reg-alert"
+      *ngIf="banner as b"
+      [attr.data-tone]="b.tone"
+      [attr.role]="b.tone === 'info' || b.tone === 'success' ? 'status' : 'alert'">
+      <span class="reg-alert__glyph" aria-hidden="true"></span>
+      <div class="reg-alert__copy">
+        <strong class="reg-alert__title">{{ b.title }}</strong>
+        <p class="reg-alert__detail" *ngIf="b.detail">{{ b.detail }}</p>
+      </div>
+      <div class="reg-alert__actions">
+        <button *ngIf="b.showConnectionRetry" type="button" class="reg-alert__btn" (click)="loadDeviceStatus()">Refresh status</button>
+        <button type="button" class="reg-alert__dismiss" (click)="dismissBanner()" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+
+    <div class="reg-workflow">
+      <div class="reg-workflow__track">
+        <span class="reg-step reg-step--done"><span class="reg-step__n">1</span> Details</span>
+        <span class="reg-step" [class.reg-step--done]="capturedPreview"><span class="reg-step__n">2</span> Face capture</span>
+        <span class="reg-step" [class.reg-step--active]="capturedPreview && !submitBlocked"
+          ><span class="reg-step__n">3</span> Submit</span
+        >
+      </div>
+      <div class="reg-workflow__badge" [class.reg-workflow__badge--ok]="capturedPreview">
+        {{ capturedPreview ? 'Photo captured' : 'Photo not captured' }}
+      </div>
+    </div>
+
+    <div class="reg-columns">
+      <article class="reg-panel">
+        <header class="reg-panel__head">
+          <h3 class="reg-panel__h">Employee profile</h3>
+          <p class="reg-panel__intro">Identity and contact fields stored with the face enrollment record.</p>
+        </header>
+        <div class="form-grid">
+          <label>
+            <span>Person ID <abbr title="required">*</abbr></span>
+            <input [(ngModel)]="registerForm.personId" placeholder="EMP001" autocomplete="off" />
+          </label>
+          <label>
+            <span>Full name <abbr title="required">*</abbr></span>
+            <input
+              [(ngModel)]="registerForm.fullName"
+              (blur)="validateIndianNameOrReset()"
+              placeholder="First name Last name"
+              autocomplete="name"
+            />
+          </label>
+          <label>
+            <span>ID card number</span>
+            <input [(ngModel)]="registerForm.idCardNumber" placeholder="Badge or national ID" autocomplete="off" />
+          </label>
+          <label>
+            <span>Phone</span>
+            <input [(ngModel)]="registerForm.phone" type="tel" placeholder="+91 …" autocomplete="tel" />
+          </label>
+          <label class="full">
+            <span>Department</span>
+            <input [(ngModel)]="registerForm.department" placeholder="Department code" autocomplete="organization" />
+          </label>
+          <div class="device-access-block full" *ngIf="activeFaceDevices.length > 0">
+            <div class="device-access-block__head">
+              <span class="device-access-block__title">Face readers <abbr title="required">*</abbr></span>
+              <span class="device-access-block__count">{{ selectedDeviceCount }} of {{ activeFaceDevices.length }} selected</span>
+            </div>
+            <p class="field-hint">Check each terminal this employee should use. Profile and face photo sync to every selected reader.</p>
+            <ul class="device-access-list">
+              <li *ngFor="let d of activeFaceDevices" class="device-access-row">
+                <label class="device-access-row__check">
+                  <input
+                    type="checkbox"
+                    [checked]="isDeviceAccessChecked(d.id)"
+                    (change)="toggleDeviceAccess(d.id, $any($event.target).checked)"
+                    [name]="'device-' + d.id" />
+                  <span class="sr-only">Allow access on {{ d.name }}</span>
+                </label>
+                <div class="device-access-row__body">
+                  <span class="device-access-row__name">{{ d.name }}</span>
+                  <span class="device-access-row__meta">
+                    <span *ngIf="d.siteControl">{{ d.siteControl }}</span>
+                    <span class="device-access-row__ip">{{ d.deviceIp }}</span>
+                    <span class="device-access-row__dir">{{ d.direction }}</span>
+                  </span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="reg-panel reg-panel--camera">
+        <header class="reg-panel__head">
+          <h3 class="reg-panel__h">Face capture</h3>
+          <p class="reg-panel__intro">
+            Open the camera and align with the guide. A photo is captured automatically when a face is detected; use Manual capture if needed.
+          </p>
+        </header>
+        <div class="camera-frame">
+          <video #cameraVideo autoplay playsinline muted></video>
+          <div
+            class="face-guide"
+            [class.face-guide--searching]="faceScanStatus === 'scanning' || faceScanStatus === 'align'"
+            [class.face-guide--hold]="faceScanStatus === 'hold'"></div>
+          <span class="camera-frame__badge" *ngIf="cameraOn">REC</span>
+        </div>
+        <p class="face-scan-hint" *ngIf="cameraOn && faceScanHint">{{ faceScanHint }}</p>
+        <canvas #captureCanvas class="hidden"></canvas>
+        <div class="reg-actions">
+          <button type="button" class="btn ghost" (click)="startCamera()" [disabled]="cameraOn">Open camera</button>
+          <button type="button" class="btn solid" (click)="captureFaceManual()" [disabled]="!cameraOn">Manual capture</button>
+          <button type="button" class="btn outline" (click)="stopCamera()" [disabled]="!cameraOn">Close camera</button>
+        </div>
+      </article>
+    </div>
+
+    <article class="reg-panel reg-panel--preview" *ngIf="capturedPreview">
+      <header class="reg-panel__head">
+        <h3 class="reg-panel__h">Captured frame</h3>
+        <p class="reg-panel__intro">Frontal, evenly lit shots give the best match rate.</p>
+      </header>
+      <div class="preview-wrap">
+        <img [src]="capturedPreview" alt="Captured face frame" />
+      </div>
+    </article>
+
+    <footer class="reg-footer">
+      <button type="button" class="btn primary" (click)="registerFace()" [disabled]="submitBlocked || submitInFlight">
+        {{ submitInFlight ? 'Submitting…' : 'Submit registration' }}
+      </button>
+      <ul class="reg-footer__tips">
+        <li>Submit stays disabled until gateway and terminal are <strong>Online</strong>, Person ID and full name are filled, and a face photo is saved (auto or manual).</li>
+        <li>After VLAN or IP changes, run <strong>Refresh status</strong> before submitting.</li>
+        <li>If status stays offline: verify cabling and PoE, then have IT confirm API URL and device IP in server and browser configuration.</li>
+      </ul>
+    </footer>
+  </div>
+</section>

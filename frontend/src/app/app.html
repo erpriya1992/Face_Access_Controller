@@ -1,0 +1,24 @@
+<div *ngIf="showLayout" class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand__logo">
+        <img class="sidebar-brand__mark" src="assets/brand/axstrack-logo.png" width="44" height="44" alt="" />
+      </div>
+      <div class="sidebar-brand__text">
+        <span class="sidebar-brand__name">Axstrack</span>
+        <span class="sidebar-brand__product">Face Access</span>
+      </div>
+    </div>
+    <a routerLink="/registration" routerLinkActive="active">User registration</a>
+    <a routerLink="/device-registration" routerLinkActive="active">Device registration</a>
+    <a routerLink="/live-transactions" routerLinkActive="active">Live access</a>
+    <a routerLink="/reports" routerLinkActive="active">Reports</a>
+    <a routerLink="/settings" routerLinkActive="active">Settings</a>
+    <button class="logout" (click)="logout()">Logout</button>
+  </aside>
+  <main class="content">
+    <router-outlet></router-outlet>
+  </main>
+</div>
+
+<router-outlet *ngIf="!showLayout"></router-outlet>

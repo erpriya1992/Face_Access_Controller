@@ -1,0 +1,564 @@
+<section class="reports-shell">
+  <div
+    class="reports-delete-overlay"
+    *ngIf="deletingPersonId"
+    role="alertdialog"
+    aria-modal="true"
+    aria-live="assertive"
+    aria-busy="true"
+    aria-labelledby="delete-face-loader-title">
+    <div class="reports-delete-overlay__panel">
+      <div class="reports-delete-overlay__spinner" aria-hidden="true"></div>
+      <p id="delete-face-loader-title" class="reports-delete-overlay__title">Removing enrollment</p>
+      <p class="reports-delete-overlay__detail">Saving to the server — the access terminal updates right after.</p>
+      <p class="reports-delete-overlay__id">Person ID: <strong>{{ deletingPersonId }}</strong></p>
+    </div>
+  </div>
+
+  <div
+    class="face-modal"
+    *ngIf="faceDetailModal"
+    (click)="closeFaceDetail()"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="face-modal-title">
+    <div class="face-modal__panel" (click)="$event.stopPropagation()">
+      <button type="button" class="face-modal__close" (click)="closeFaceDetail()" aria-label="Close">×</button>
+      <h2 id="face-modal-title" class="face-modal__title">Employee details</h2>
+      <img
+        *ngIf="faceDetailModal && dailyFaceDataUrl(faceDetailModal)"
+        [src]="dailyFaceDataUrl(faceDetailModal)"
+        alt=""
+        class="face-modal__img" />
+      <p *ngIf="faceDetailModal && !dailyFaceDataUrl(faceDetailModal)" class="face-modal__no-photo">No photo on file</p>
+      <dl class="face-modal__dl" *ngIf="faceDetailModal">
+        <dt>Person name</dt>
+        <dd>{{ faceDetailModal!.fullName?.trim() ? faceDetailModal!.fullName : '—' }}</dd>
+        <dt>Person ID</dt>
+        <dd>{{ faceDetailModal!.personId }}</dd>
+        <dt>Face ID</dt>
+        <dd>{{ faceDetailModal!.faceId?.trim() ? faceDetailModal!.faceId : '—' }}</dd>
+        <dt>Department</dt>
+        <dd>{{ faceDetailModal!.department?.trim() ? faceDetailModal!.department : '—' }}</dd>
+        <dt>Phone</dt>
+        <dd>{{ faceDetailModal!.phone?.trim() ? faceDetailModal!.phone : '—' }}</dd>
+        <dt>ID / Card</dt>
+        <dd>{{ faceDetailModal!.idCardNumber?.trim() ? faceDetailModal!.idCardNumber : '—' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <header class="reports-hero">
+    <div class="reports-hero__accent" aria-hidden="true"></div>
+    <div class="reports-hero__main">
+      <p class="reports-eyebrow">Attendance</p>
+      <h1>Reports</h1>
+      <p class="reports-lead">Daily and period views, gate logs, hours, charts, and activity review — with Excel and PDF export.</p>
+    </div>
+  </header>
+
+  <nav class="tabs tabs--underline" role="tablist" aria-label="Report type">
+    <button type="button" class="tab tab--underline" [class.active]="activeTab === 'daily'" (click)="setTab('daily')">Daily</button>
+    <button type="button" class="tab tab--underline" [class.active]="activeTab === 'monthly'" (click)="setTab('monthly')">Monthly</button>
+    <button type="button" class="tab tab--underline" [class.active]="activeTab === 'inout'" (click)="setTab('inout')">Gate log</button>
+    <button type="button" class="tab tab--underline" [class.active]="activeTab === 'hours'" (click)="setTab('hours')">Hours</button>
+    <button type="button" class="tab tab--underline" [class.active]="activeTab === 'insights'" (click)="setTab('insights')">Insights</button>
+    <button type="button" class="tab tab--underline tab--emphasis" [class.active]="activeTab === 'activity'" (click)="setTab('activity')">Activity</button>
+  </nav>
+
+  <div class="toolbar toolbar--card">
+    <label class="search-field" *ngIf="activeTab !== 'insights'">
+      <span class="sr-only">Search</span>
+      <input type="search" [(ngModel)]="searchText" placeholder="Filter this page…" />
+    </label>
+    <label class="page-size-field" *ngIf="activeTab !== 'insights'">
+      <span>Rows / page</span>
+      <select [(ngModel)]="reportPageSize" (ngModelChange)="onReportPageSizeChange()">
+        <option [ngValue]="25">25</option>
+        <option [ngValue]="50">50</option>
+        <option [ngValue]="100">100</option>
+        <option [ngValue]="200">200</option>
+      </select>
+    </label>
+    <div class="toolbar-actions" *ngIf="activeTab === 'daily'">
+      <button type="button" class="btn secondary" (click)="exportDailyExcel()" [disabled]="exportBusy || loading">Excel</button>
+      <button type="button" class="btn secondary" (click)="exportDailyPdf()" [disabled]="exportBusy || loading">PDF</button>
+    </div>
+    <div class="toolbar-actions" *ngIf="activeTab === 'monthly'">
+      <button type="button" class="btn secondary" (click)="exportMonthlyExcel()" [disabled]="exportBusy || loading">Excel</button>
+      <button type="button" class="btn secondary" (click)="exportMonthlyPdf()" [disabled]="exportBusy || loading">PDF</button>
+    </div>
+    <div class="toolbar-actions" *ngIf="activeTab === 'inout'">
+      <button type="button" class="btn secondary" (click)="exportInOutExcel()" [disabled]="exportBusy || loading">Excel</button>
+      <button type="button" class="btn secondary" (click)="exportInOutPdf()" [disabled]="exportBusy || loading">PDF</button>
+    </div>
+    <div class="toolbar-actions" *ngIf="activeTab === 'hours'">
+      <button type="button" class="btn secondary" (click)="exportHoursExcel()" [disabled]="exportBusy || loading">Excel</button>
+      <button type="button" class="btn secondary" (click)="exportHoursPdf()" [disabled]="exportBusy || loading">PDF</button>
+    </div>
+    <div class="toolbar-actions" *ngIf="activeTab === 'activity'">
+      <button type="button" class="btn secondary" (click)="exportActivityExcel()" [disabled]="exportBusy || loading">Excel</button>
+      <button type="button" class="btn secondary" (click)="exportActivityPdf()" [disabled]="exportBusy || loading">PDF</button>
+    </div>
+  </div>
+
+  <p class="message" *ngIf="message">{{ message }}</p>
+  <p class="loading" *ngIf="loading">
+    <ng-container *ngIf="activeTab === 'daily'; else reportsLoadingGeneric">
+      Loading daily report… If photos are missing in the database, face images are loaded from the access terminal (this can take a little longer).
+    </ng-container>
+    <ng-template #reportsLoadingGeneric>Loading…</ng-template>
+  </p>
+  <p class="loading export-busy" *ngIf="exportBusy && !loading">Preparing export…</p>
+
+  <!-- Daily -->
+  <div class="panel panel--report" *ngIf="activeTab === 'daily' && !loading">
+    @let stats = dailyStatusCounts();
+    <div class="report-panel-head">
+      <div>
+        <h2 class="report-panel-title">Daily attendance</h2>
+        <p class="report-panel-desc">First check-in and last check-out for the selected calendar day.</p>
+      </div>
+      <div class="panel-toolbar panel-toolbar--inline">
+        <label class="field-compact">
+          <span>Report date</span>
+          <input type="date" [(ngModel)]="today" />
+        </label>
+        <button type="button" class="btn primary" (click)="loadDailyReport()">Run report</button>
+      </div>
+    </div>
+
+    <div class="stat-strip" *ngIf="dailyReport.length > 0">
+      <div class="stat-tile">
+        <span class="stat-tile__value">{{ dailyTotalCount }}</span>
+        <span class="stat-tile__label">People in report</span>
+      </div>
+      <div class="stat-tile stat-tile--ok">
+        <span class="stat-tile__value">{{ stats.present }}</span>
+        <span class="stat-tile__label">Present · this page</span>
+      </div>
+      <div class="stat-tile stat-tile--warn">
+        <span class="stat-tile__value">{{ stats.absent }}</span>
+        <span class="stat-tile__label">Absent · this page</span>
+      </div>
+      <div class="stat-tile stat-tile--neutral" *ngIf="stats.other > 0">
+        <span class="stat-tile__value">{{ stats.other }}</span>
+        <span class="stat-tile__label">Other status · this page</span>
+      </div>
+    </div>
+    <p class="stat-strip-hint" *ngIf="searchText.trim() && dailyReport.length > 0">Totals in the strip reflect the search filter on the current page.</p>
+
+    <div class="table-wrap table-wrap--elevated">
+      <table class="data-table data-table--reports">
+        <thead>
+          <tr>
+            <th class="col-id">Person ID</th>
+            <th class="col-name">Person name</th>
+            <th>Date</th>
+            <th>First in</th>
+            <th>Last out</th>
+            <th class="col-num">Hours</th>
+            <th class="col-status">Status</th>
+            <th class="col-face">Face</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filterDaily(); let i = index" [class.row-alt]="i % 2 === 1">
+            <td class="cell-id"><span class="id-pill">{{ r.personId }}</span></td>
+            <td class="cell-name">{{ r.fullName?.trim() ? r.fullName : '—' }}</td>
+            <td class="cell-muted">{{ r.date }}</td>
+            <td>{{ r.firstIn | date : 'medium' }}</td>
+            <td>{{ r.lastOut | date : 'medium' }}</td>
+            <td class="num cell-hours">{{ r.totalHoursFormatted ?? '—' }}</td>
+            <td>
+              <span
+                class="badge"
+                [class.badge--present]="isDailyPresent(r.status)"
+                [class.badge--absent]="isDailyAbsent(r.status)"
+                [class.badge--other]="!isDailyPresent(r.status) && !isDailyAbsent(r.status)">
+                {{ r.status }}
+              </span>
+            </td>
+            <td class="cell-face">
+              <div class="face-cell">
+                <button
+                  type="button"
+                  class="face-thumb-btn"
+                  (click)="openFaceDetail(r, $event)"
+                  title="View photo and employee details (opens centered)">
+                  <img *ngIf="dailyFaceDataUrl(r)" [src]="dailyFaceDataUrl(r)" alt="" class="face-thumb" />
+                  <span *ngIf="!dailyFaceDataUrl(r)" class="face-placeholder">No photo</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-face-delete"
+                  (click)="deleteEnrollment(r.personId, $event)"
+                  [disabled]="deletingPersonId === r.personId"
+                  title="Remove this person from the face terminal and database">
+                  {{ deletingPersonId === r.personId ? '…' : 'Remove' }}
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="filterDaily().length === 0">
+            <td colspan="8" class="empty empty--illustrated">
+              <span class="empty__title">No rows for this page</span>
+              <span class="empty__sub">Choose a date and run the report, or try another page.</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar pagination-bar--footer" *ngIf="dailyTotalCount > 0">
+      <span class="pagination-meta">{{ dailyTotalCount }} people · Page {{ dailyPage }} of {{ dailyTotalPages }}</span>
+      <div class="pagination-actions">
+        <button type="button" class="btn secondary" (click)="goDailyPage(-1)" [disabled]="dailyPage <= 1">Previous</button>
+        <button type="button" class="btn secondary" (click)="goDailyPage(1)" [disabled]="dailyPage >= dailyTotalPages">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly -->
+  <div class="panel panel--report" *ngIf="activeTab === 'monthly' && !loading">
+    <div class="panel-toolbar">
+      <label>
+        <span>Year</span>
+        <input type="number" [(ngModel)]="year" min="2000" max="2100" />
+      </label>
+      <label>
+        <span>Month</span>
+        <input type="number" [(ngModel)]="month" min="1" max="12" />
+      </label>
+      <button type="button" class="btn primary" (click)="loadMonthlyReport()">Generate</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Person ID</th>
+            <th>Year</th>
+            <th>Month</th>
+            <th>Present days</th>
+            <th>Absent days</th>
+            <th class="col-actions">Face</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filterMonthly()">
+            <td>{{ r.personId }}</td>
+            <td>{{ r.year }}</td>
+            <td>{{ r.month }}</td>
+            <td class="num">{{ r.presentDays }}</td>
+            <td class="num">{{ r.absentDays }}</td>
+            <td class="cell-actions">
+              <button
+                type="button"
+                class="btn btn-face-delete"
+                (click)="deleteEnrollment(r.personId, $event)"
+                [disabled]="deletingPersonId === r.personId"
+                title="Remove this person from the face terminal and database">
+                {{ deletingPersonId === r.personId ? '…' : 'Remove' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filterMonthly().length === 0">
+            <td colspan="6" class="empty">No rows. Set year/month and generate.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" *ngIf="monthlyTotalCount > 0">
+      <span class="pagination-meta">{{ monthlyTotalCount }} people · Page {{ monthlyPage }} / {{ monthlyTotalPages }}</span>
+      <div class="pagination-actions">
+        <button type="button" class="btn secondary" (click)="goMonthlyPage(-1)" [disabled]="monthlyPage <= 1">Previous</button>
+        <button type="button" class="btn secondary" (click)="goMonthlyPage(1)" [disabled]="monthlyPage >= monthlyTotalPages">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN/OUT -->
+  <div class="panel panel--report" *ngIf="activeTab === 'inout' && !loading">
+    <div class="panel-toolbar">
+      <label>
+        <span>Date</span>
+        <input type="date" [(ngModel)]="inOutDate" />
+      </label>
+      <button type="button" class="btn primary" (click)="loadInOutReport()">Generate</button>
+    </div>
+    <p class="hint">Chronological gate reads: <strong>Entry</strong> (first), <strong>Re-access</strong> (returned to reader), <strong>Exit</strong> (last). <strong>Single visit</strong> = one read only.</p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Person ID</th>
+            <th>Name</th>
+            <th>Device</th>
+            <th>Event</th>
+            <th class="col-actions">Face</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filterInOut()">
+            <td>{{ formatDt(r.transactionTime) }}</td>
+            <td>{{ r.personId }}</td>
+            <td>{{ r.fullName || '—' }}</td>
+            <td>{{ r.deviceSn || '—' }}</td>
+            <td><span class="badge event" [attr.data-ev]="r.eventLabel">{{ r.eventLabel }}</span></td>
+            <td class="cell-actions">
+              <button
+                type="button"
+                class="btn btn-face-delete"
+                (click)="deleteEnrollment(r.personId, $event)"
+                [disabled]="deletingPersonId === r.personId"
+                title="Remove this person from the face terminal and database">
+                {{ deletingPersonId === r.personId ? '…' : 'Remove' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filterInOut().length === 0">
+            <td colspan="6" class="empty">No rows. Pick a date and generate.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" *ngIf="inOutTotalCount > 0">
+      <span class="pagination-meta">{{ inOutTotalCount }} gate reads · Page {{ inOutPage }} / {{ inOutTotalPages }}</span>
+      <div class="pagination-actions">
+        <button type="button" class="btn secondary" (click)="goInOutPage(-1)" [disabled]="inOutPage <= 1">Previous</button>
+        <button type="button" class="btn secondary" (click)="goInOutPage(1)" [disabled]="inOutPage >= inOutTotalPages">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Total hours -->
+  <div class="panel panel--report" *ngIf="activeTab === 'hours' && !loading">
+    <div class="panel-toolbar">
+      <label>
+        <span>Year</span>
+        <input type="number" [(ngModel)]="hoursYear" min="2000" max="2100" />
+      </label>
+      <label>
+        <span>Month</span>
+        <input type="number" [(ngModel)]="hoursMonth" min="1" max="12" />
+      </label>
+      <button type="button" class="btn primary" (click)="loadHoursReport()">Generate</button>
+    </div>
+    <p class="hint">Sum of (last out − first in) per day, across the month, per person.</p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Person ID</th>
+            <th>Period</th>
+            <th>Days present</th>
+            <th>Total hrs (month)</th>
+            <th class="col-actions">Face</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filterHours()">
+            <td>{{ r.personId }}</td>
+            <td>{{ formatPeriod(r.year, r.month) }}</td>
+            <td class="num">{{ r.daysPresent }}</td>
+            <td class="num strong">{{ r.totalHoursFormatted }}</td>
+            <td class="cell-actions">
+              <button
+                type="button"
+                class="btn btn-face-delete"
+                (click)="deleteEnrollment(r.personId, $event)"
+                [disabled]="deletingPersonId === r.personId"
+                title="Remove this person from the face terminal and database">
+                {{ deletingPersonId === r.personId ? '…' : 'Remove' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filterHours().length === 0">
+            <td colspan="5" class="empty">No rows. Set month and generate.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" *ngIf="hoursTotalCount > 0">
+      <span class="pagination-meta">{{ hoursTotalCount }} people · Page {{ hoursPage }} / {{ hoursTotalPages }}</span>
+      <div class="pagination-actions">
+        <button type="button" class="btn secondary" (click)="goHoursPage(-1)" [disabled]="hoursPage <= 1">Previous</button>
+        <button type="button" class="btn secondary" (click)="goHoursPage(1)" [disabled]="hoursPage >= hoursTotalPages">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Behavior insights (charts) -->
+  <div class="panel panel-insights" *ngIf="activeTab === 'insights' && !loading">
+    <div class="panel-toolbar insights-toolbar">
+      <label>
+        <span>Hour &amp; department (day)</span>
+        <input type="date" [(ngModel)]="insightsDate" />
+      </label>
+      <label>
+        <span>Volume trend — end date</span>
+        <input type="date" [(ngModel)]="insightsVolumeEndDate" />
+      </label>
+      <label>
+        <span>Days</span>
+        <input type="number" [(ngModel)]="insightsVolumeDays" min="7" max="90" />
+      </label>
+      <label>
+        <span>Top scanners — from</span>
+        <input type="date" [(ngModel)]="insightsTopStart" />
+      </label>
+      <label>
+        <span>to</span>
+        <input type="date" [(ngModel)]="insightsTopEnd" />
+      </label>
+      <button type="button" class="btn primary" (click)="loadInsights()">Refresh charts</button>
+    </div>
+    <p class="hint corporate-hint">
+      Visual summaries for attendance operations: peak gate times, multi-day volume, individuals with frequent reads, and scan share by department (known employees only).
+    </p>
+    <div class="insights-grid">
+      <div class="chart-card">
+        <h3>Reads by hour</h3>
+        <div class="chart-wrap">
+          <canvas #hourlyCanvas></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>Daily volume</h3>
+        <div class="chart-wrap">
+          <canvas #volumeCanvas></canvas>
+          <div class="chart-empty-overlay" *ngIf="insightsVolume.length === 0">No scans in this date range.</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>Top scanners</h3>
+        <div class="chart-wrap chart-wrap--wide">
+          <canvas #topCanvas></canvas>
+          <div class="chart-empty-overlay" *ngIf="insightsTop.length === 0">No data for this period.</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>By department</h3>
+        <div class="chart-wrap chart-wrap--doughnut">
+          <canvas #deptCanvas></canvas>
+          <div class="chart-empty-overlay" *ngIf="insightsDept.length === 0">No departmental data for this day.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity monitor (HR / managers) -->
+  <div class="panel panel-activity" *ngIf="activeTab === 'activity' && !loading">
+    <div class="panel-toolbar">
+      <label>
+        <span>Date</span>
+        <input type="date" [(ngModel)]="activityDate" />
+      </label>
+      <button type="button" class="btn primary" (click)="loadActivityReport()">Refresh data</button>
+      <label class="filter-check">
+        <input type="checkbox" [(ngModel)]="showMultiAccessOnly" />
+        <span>Show only 3+ gate reads (re-entry pattern)</span>
+      </label>
+    </div>
+
+    <div class="kpi-row" *ngIf="activityTotalCount > 0">
+      <div class="kpi">
+        <span class="kpi-value">{{ activityStats().total }}</span>
+        <span class="kpi-label">Employees with activity (whole day)</span>
+      </div>
+      <div class="kpi kpi-warn">
+        <span class="kpi-value">{{ activityStats().multi }}</span>
+        <span class="kpi-label">3+ reads (this page)</span>
+      </div>
+      <div class="kpi kpi-alert">
+        <span class="kpi-value">{{ activityStats().review }}</span>
+        <span class="kpi-label">HR review (this page)</span>
+      </div>
+    </div>
+
+    <p class="hint corporate-hint">
+      Use this view when staff pass the face reader several times in one day (e.g. leaving site and returning).
+      Expand a row to see each access with time gaps. Export preserves the full timeline for records.
+    </p>
+
+    <div class="table-wrap">
+      <table class="data-table activity-table">
+        <thead>
+          <tr>
+            <th class="col-expand"></th>
+            <th>Employee</th>
+            <th>Person ID</th>
+            <th class="num">Gate reads</th>
+            <th>First access</th>
+            <th>Last access</th>
+            <th>On premises (span)</th>
+            <th>HR / manager</th>
+            <th class="col-actions">Face</th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let r of filterActivity()">
+            <tr [class.row-review]="r.requiresHrReview" (click)="toggleExpand(r.personId)" class="row-clickable">
+              <td class="col-expand">
+                <span class="chev">{{ expandedPersonId === r.personId ? '▼' : '▶' }}</span>
+              </td>
+              <td>
+                <strong>{{ r.fullName || '—' }}</strong>
+                <div class="subtle">{{ r.monitoringNote }}</div>
+              </td>
+              <td>{{ r.personId }}</td>
+              <td class="num">
+                <span class="read-count">{{ r.accessCount }}</span>
+              </td>
+              <td>{{ formatDt(r.firstAccessTime) }}</td>
+              <td>{{ formatDt(r.lastAccessTime) }}</td>
+              <td class="num">{{ r.timeOnPremisesFormatted }}</td>
+              <td>
+                <span class="pill" *ngIf="r.requiresHrReview">Review</span>
+                <span class="pill pill-ok" *ngIf="!r.requiresHrReview">OK</span>
+              </td>
+              <td class="cell-actions" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="btn btn-face-delete"
+                  (click)="deleteEnrollment(r.personId, $event)"
+                  [disabled]="deletingPersonId === r.personId"
+                  title="Remove this person from the face terminal and database">
+                  {{ deletingPersonId === r.personId ? '…' : 'Remove' }}
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="expandedPersonId === r.personId" class="timeline-row">
+              <td colspan="9">
+                <div class="timeline">
+                  <div class="timeline-title">Access timeline — {{ r.date }}</div>
+                  <div class="timeline-items">
+                    <div class="timeline-item" *ngFor="let ev of r.events" [attr.data-seq]="ev.sequence">
+                      <div class="t-meta">
+                        <span class="t-seq">{{ ev.sequence }} / {{ ev.totalForPerson }}</span>
+                        <span class="t-time">{{ formatDt(ev.time) }}</span>
+                        <span class="t-gap" *ngIf="ev.minutesSincePrevious != null">+{{ ev.minutesSincePrevious }} min since previous</span>
+                      </div>
+                      <div class="t-role">{{ ev.accessRoleLabel }}</div>
+                      <div class="t-device" *ngIf="ev.deviceSn">Device: {{ ev.deviceSn }}</div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </ng-container>
+          <tr *ngIf="filterActivity().length === 0">
+            <td colspan="9" class="empty">No rows. Choose a date and refresh, or widen your filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" *ngIf="activityTotalCount > 0">
+      <span class="pagination-meta">{{ activityTotalCount }} employees · Page {{ activityPage }} / {{ activityTotalPages }}</span>
+      <div class="pagination-actions">
+        <button type="button" class="btn secondary" (click)="goActivityPage(-1)" [disabled]="activityPage <= 1">Previous</button>
+        <button type="button" class="btn secondary" (click)="goActivityPage(1)" [disabled]="activityPage >= activityTotalPages">Next</button>
+      </div>
+    </div>
+  </div>
+</section>

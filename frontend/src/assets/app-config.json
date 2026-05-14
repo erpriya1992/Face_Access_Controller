@@ -1,0 +1,5 @@
+{
+  "apiBaseUrl": "https://localhost:7298/api",
+  "hubUrl": "https://localhost:7298/hubs/live-transactions"
+}
+
