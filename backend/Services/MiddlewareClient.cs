@@ -439,11 +439,70 @@ public class MiddlewareClient(HttpClient httpClient, IConfiguration configuratio
             IsEasyWay = true
         };
 
+        await PostPhotoCreateAsync(payload, ct);
+    }
+
+    /// <summary>
+    /// Starts on-terminal face capture (no image upload). The reader prompts the user at the device.
+    /// Maps to middleware <c>photocreate</c> without <c>imgBase64</c> and with <c>type</c> set (1 = face photo).
+    /// </summary>
+    public async Task CreatePhotoOnDeviceCaptureAsync(string personId, CancellationToken ct, string? deviceIpOverride = null, int captureType = 1)
+    {
+        if (string.IsNullOrWhiteSpace(personId))
+        {
+            throw new ArgumentException("Person ID is required.", nameof(personId));
+        }
+
+        var payload = new MiddlewarePhotoCreateRequest
+        {
+            DeviceIp = ResolveDeviceIpForApi(deviceIpOverride) ?? string.Empty,
+            DevicePassword = _devicePassword,
+            PersonId = personId.Trim(),
+            Type = captureType,
+            ImgBase64 = null,
+            IsEasyWay = false
+        };
+
+        await PostPhotoCreateAsync(payload, ct);
+    }
+
+    /// <summary>Polls the terminal until a face template appears or attempts are exhausted.</summary>
+    public async Task<string?> WaitForFaceIdOnDeviceAsync(
+        string personId,
+        CancellationToken ct,
+        string? deviceIpOverride = null,
+        int maxAttempts = 20,
+        int delayMs = 2000)
+    {
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            var faceId = await TryFindFaceIdAsync(personId, ct, deviceIpOverride);
+            if (!string.IsNullOrWhiteSpace(faceId))
+            {
+                return faceId;
+            }
+
+            if (attempt < maxAttempts - 1)
+            {
+                await Task.Delay(delayMs, ct);
+            }
+        }
+
+        return null;
+    }
+
+    private async Task PostPhotoCreateAsync(MiddlewarePhotoCreateRequest payload, CancellationToken ct)
+    {
         var createPhotoUrl = _baseUrl.EndsWith("/api/person", StringComparison.OrdinalIgnoreCase)
             ? $"{_baseUrl}/photocreate"
             : BuildMiddlewareUrl("/api/person/photocreate");
 
-        var response = await httpClient.PostAsJsonAsync(createPhotoUrl, payload, ct);
+        var jsonOptions = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        var response = await httpClient.PostAsJsonAsync(createPhotoUrl, payload, jsonOptions, ct);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);

@@ -25,14 +25,20 @@ public class RegistrationController(
             return BadRequest("Request body is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.PersonId) || string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.ImageBase64))
+        if (string.IsNullOrWhiteSpace(request.PersonId) || string.IsNullOrWhiteSpace(request.FullName))
+        {
+            return BadRequest("PersonId and FullName are required.");
+        }
+
+        var deviceEnrollment = IsDeviceEnrollmentMode(request);
+        if (!deviceEnrollment && string.IsNullOrWhiteSpace(request.ImageBase64))
         {
             return BadRequest("PersonId, FullName and ImageBase64 are required.");
         }
 
         try
         {
-            if (request.ImageBase64.Contains(','))
+            if (!string.IsNullOrWhiteSpace(request.ImageBase64) && request.ImageBase64.Contains(','))
             {
                 request.ImageBase64 = request.ImageBase64.Split(',').Last();
             }
@@ -64,6 +70,13 @@ public class RegistrationController(
             }
 
             var targets = await ResolveEnrollmentTargetsAsync(request, ct);
+            if (deviceEnrollment && targets.Count > 1)
+            {
+                return BadRequest(new
+                {
+                    message = "Device capture enrollment supports one face reader at a time. Select a single terminal."
+                });
+            }
             if (targets.Count == 0)
             {
                 if (await db.FaceDevices.AnyAsync(x => x.IsActive, ct) &&
@@ -94,10 +107,35 @@ public class RegistrationController(
                     }
 
                     await middlewareClient.CreatePersonAsync(request, ct, target.DeviceIp);
-                    await middlewareClient.CreatePhotoAsync(request, ct, target.DeviceIp);
+                    if (deviceEnrollment)
+                    {
+                        await middlewareClient.CreatePhotoOnDeviceCaptureAsync(request.PersonId, ct, target.DeviceIp);
+                    }
+                    else
+                    {
+                        await middlewareClient.CreatePhotoAsync(request, ct, target.DeviceIp);
+                    }
                     enrolledIps.Add(target.DeviceIp);
 
-                    var faceId = await middlewareClient.TryFindFaceIdAsync(request.PersonId, ct, target.DeviceIp);
+                    var faceId = deviceEnrollment
+                        ? await middlewareClient.WaitForFaceIdOnDeviceAsync(request.PersonId, ct, target.DeviceIp)
+                        : await middlewareClient.TryFindFaceIdAsync(request.PersonId, ct, target.DeviceIp);
+                    if (deviceEnrollment && string.IsNullOrWhiteSpace(faceId))
+                    {
+                        await RollbackTerminalEnrollmentsAsync(request.PersonId, enrolledIps, ct);
+                        return BadRequest(new
+                        {
+                            message =
+                                "The terminal did not report a face template in time. Ask the employee to complete face capture on the reader, then try again."
+                        });
+                    }
+
+                    if (deviceEnrollment && string.IsNullOrWhiteSpace(request.ImageBase64))
+                    {
+                        request.ImageBase64 =
+                            await middlewareClient.TryGetPhotoBase64FromDeviceAsync(request.PersonId, ct, target.DeviceIp)
+                            ?? string.Empty;
+                    }
                     junctionRows.Add(new EmployeeFaceDevice
                     {
                         FaceDeviceId = target.Device.Id,
@@ -128,7 +166,7 @@ public class RegistrationController(
             db.Employees.Add(employee);
             await db.SaveChangesAsync(ct);
 
-            return await BuildRegistrationSuccessAsync(ct);
+            return await BuildRegistrationSuccessAsync(ct, string.IsNullOrWhiteSpace(request.ImageBase64) ? null : request.ImageBase64);
         }
         catch (InvalidOperationException ex)
         {
@@ -158,6 +196,7 @@ public class RegistrationController(
         string? terminalIp,
         CancellationToken ct)
     {
+        var deviceEnrollment = IsDeviceEnrollmentMode(request);
         if (faceDeviceFk is int devId)
         {
             var chosen = await db.FaceDevices.AsNoTracking()
@@ -186,8 +225,34 @@ public class RegistrationController(
         }
 
         await middlewareClient.CreatePersonAsync(request, ct, terminalIp);
-        await middlewareClient.CreatePhotoAsync(request, ct, terminalIp);
-        var resolvedFaceId = await middlewareClient.TryFindFaceIdAsync(request.PersonId, ct, terminalIp);
+        if (deviceEnrollment)
+        {
+            await middlewareClient.CreatePhotoOnDeviceCaptureAsync(request.PersonId, ct, terminalIp);
+        }
+        else
+        {
+            await middlewareClient.CreatePhotoAsync(request, ct, terminalIp);
+        }
+
+        var resolvedFaceId = deviceEnrollment
+            ? await middlewareClient.WaitForFaceIdOnDeviceAsync(request.PersonId, ct, terminalIp)
+            : await middlewareClient.TryFindFaceIdAsync(request.PersonId, ct, terminalIp);
+        if (deviceEnrollment && string.IsNullOrWhiteSpace(resolvedFaceId))
+        {
+            await middlewareClient.DeletePersonOnDeviceAsync(request.PersonId, ct, terminalIp);
+            return BadRequest(new
+            {
+                message =
+                    "The terminal did not report a face template in time. Ask the employee to complete face capture on the reader, then try again."
+            });
+        }
+
+        if (deviceEnrollment && string.IsNullOrWhiteSpace(request.ImageBase64))
+        {
+            request.ImageBase64 =
+                await middlewareClient.TryGetPhotoBase64FromDeviceAsync(request.PersonId, ct, terminalIp)
+                ?? string.Empty;
+        }
 
         var employee = new Employee
         {
@@ -214,7 +279,7 @@ public class RegistrationController(
 
         db.Employees.Add(employee);
         await db.SaveChangesAsync(ct);
-        return await BuildRegistrationSuccessAsync(ct);
+        return await BuildRegistrationSuccessAsync(ct, string.IsNullOrWhiteSpace(request.ImageBase64) ? null : request.ImageBase64);
     }
 
     private async Task<List<EnrollmentTarget>> ResolveEnrollmentTargetsAsync(RegisterFaceRequest request, CancellationToken ct)
@@ -265,7 +330,7 @@ public class RegistrationController(
         }
     }
 
-    private async Task<IActionResult> BuildRegistrationSuccessAsync(CancellationToken ct)
+    private async Task<IActionResult> BuildRegistrationSuccessAsync(CancellationToken ct, string? photoBase64 = null)
     {
         bool? faceDeviceUiApplied = null;
         if (configuration.GetValue("FaceDeviceUi:ApplyAfterRegistration", false))
@@ -275,7 +340,7 @@ public class RegistrationController(
 
         var webMessage = configuration["FaceDeviceUi:WebSuccessMessage"]
                          ?? "Face registration completed and synced to device.";
-        return Ok(new { message = webMessage, faceDeviceUiApplied });
+        return Ok(new { message = webMessage, faceDeviceUiApplied, photoBase64 });
     }
 
     private Task<IActionResult> HandleMiddlewareErrorAsync(HttpRequestException ex, string personId)
@@ -470,6 +535,9 @@ public class RegistrationController(
 
         return Ok(new { message = "Face photo updated and synced to the device." });
     }
+
+    private static bool IsDeviceEnrollmentMode(RegisterFaceRequest request) =>
+        string.Equals(request.EnrollmentMode?.Trim(), "device", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsLikelyDuplicateCardError(string? detail)
     {

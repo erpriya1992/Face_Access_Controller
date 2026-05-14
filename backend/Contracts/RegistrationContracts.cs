@@ -9,6 +9,12 @@ public class RegisterFaceRequest
     public string? Department { get; set; }
     public string ImageBase64 { get; set; } = string.Empty;
 
+    /// <summary>
+    /// <c>web</c> (default): upload or webcam image is pushed to the terminal.
+    /// <c>device</c>: person is created on the terminal and face is captured on the reader camera (no web image).
+    /// </summary>
+    public string EnrollmentMode { get; set; } = "web";
+
     /// <summary>Legacy single-device selection; used when <see cref="FaceDeviceAccess"/> is empty.</summary>
     public int? FaceDeviceId { get; set; }
 

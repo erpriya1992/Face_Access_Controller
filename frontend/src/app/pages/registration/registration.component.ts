@@ -8,6 +8,8 @@ import { ApiService, DeviceConnectivityStatus, FaceDeviceListDto } from '../../a
 /** Face scan UI state for auto-capture (BlazeFace + oval guide). */
 export type FaceScanStatus = 'off' | 'loading' | 'scanning' | 'align' | 'hold' | 'done' | 'error';
 
+export type EnrollmentMode = 'web' | 'device';
+
 export type BannerTone = 'info' | 'success' | 'warn' | 'error';
 
 export interface UiBanner {
@@ -27,6 +29,7 @@ export interface UiBanner {
 export class RegistrationComponent implements OnInit, OnDestroy {
   @ViewChild('cameraVideo') cameraVideo?: ElementRef<HTMLVideoElement>;
   @ViewChild('captureCanvas') captureCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('photoFileInput') photoFileInput?: ElementRef<HTMLInputElement>;
 
   registerForm: {
     personId: string;
@@ -51,7 +54,20 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   faceDevices: FaceDeviceListDto[] = [];
   faceDevicesLoaded = false;
   cameraOn = false;
+  cameraStarting = false;
+  webcamPanelOpen = false;
   capturedPreview = '';
+  /** Active photo slot tab (only slot 1 is used for enrollment today). */
+  activePhotoSlot = 1;
+  /** web = upload/webcam image; device = capture on the face reader terminal. */
+  enrollmentMode: EnrollmentMode = 'web';
+  /** Set after a successful device-capture enrollment (no local image required). */
+  deviceCaptureComplete = false;
+  deviceCaptureDialogOpen = false;
+  deviceCaptureDeviceId: number | null = null;
+  deviceCaptureInFlight = false;
+  /** True while a picked file is being read and decoded for the photo frame. */
+  photoUploadLoading = false;
   /** Auto face-detect pipeline status (shown under the camera frame). */
   faceScanStatus: FaceScanStatus = 'off';
   banner: UiBanner | null = null;
@@ -77,7 +93,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   private faceDetectionBootstrapped = false;
   /** Alternate webcam flip — some browsers/devices need false instead of true. */
   private flipHorizontal = true;
-  private flipProbeCounter = 0;
+  private readonly uploadMaxEdgePx = 1280;
+  private readonly uploadJpegQuality = 0.88;
+  private flipProbeCounter= 0;
 
   constructor(
     private api: ApiService,
@@ -101,6 +119,17 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       default:
         return '';
     }
+  }
+
+  get webcamCaptureReady(): boolean {
+    if (this.cameraStarting || !this.webcamPanelOpen) {
+      return false;
+    }
+    const video = this.cameraVideo?.nativeElement;
+    if (video && video.readyState >= 2 && video.videoWidth > 0) {
+      return true;
+    }
+    return this.cameraOn;
   }
 
   get submitBlocked(): boolean {
@@ -182,7 +211,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const active = this.activeFaceDevices;
     const next: Record<number, boolean> = {};
     active.forEach((d) => {
-      next[d.id] = active.length === 1;
+      next[d.id] = true;
     });
     this.deviceAccess = next;
   }
@@ -285,7 +314,40 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.banner = { tone, title, detail, showConnectionRetry };
   }
 
+  openWebcamPanel(): void {
+    if (this.deviceCaptureDialogOpen || this.deviceCaptureInFlight) {
+      return;
+    }
+    this.webcamPanelOpen = true;
+    this.enrollmentMode = 'web';
+    this.deviceCaptureComplete = false;
+    setTimeout(() => void this.startCamera(), 0);
+  }
+
+  private async waitForCameraVideo(maxAttempts = 20): Promise<HTMLVideoElement | null> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const video = this.cameraVideo?.nativeElement;
+      if (video) {
+        return video;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return null;
+  }
+
+  private releaseCameraStream(): void {
+    this.cameraStream?.getTracks().forEach((t) => t.stop());
+    this.cameraStream = undefined;
+  }
+
   async startCamera(): Promise<void> {
+    if (this.cameraStarting) {
+      return;
+    }
+
+    this.cameraStarting = true;
+    this.cameraOn = false;
+
     try {
       this.cancelFaceDetectionLoop();
       this.autoCaptureComplete = false;
@@ -293,73 +355,105 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       this.faceDetectionBootstrapped = false;
       this.flipHorizontal = true;
       this.flipProbeCounter = 0;
-      this.faceScanStatus = 'off';
+      this.faceScanStatus = 'loading';
       this.capturedPreview = '';
       this.registerForm.imageBase64 = '';
+
+      this.releaseCameraStream();
 
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
       });
-      const video = this.cameraVideo?.nativeElement;
-      if (video) {
-        video.srcObject = this.cameraStream;
-        this.cameraOn = true;
-        this.faceScanStatus = 'loading';
+
+      const video = await this.waitForCameraVideo();
+      if (!video) {
+        this.releaseCameraStream();
+        this.faceScanStatus = 'error';
         this.setBanner(
-          'info',
-          'Camera running',
-          'Stay in the oval — the photo is taken automatically when your face is detected.'
+          'warn',
+          'Camera not ready',
+          'Could not attach the webcam preview. Close Webcam and open it again.'
         );
-
-        const tryStart = () => {
-          if (this.autoCaptureComplete || this.registerForm.imageBase64?.trim()) {
-            return;
-          }
-          if (this.faceDetectionBootstrapped) {
-            return;
-          }
-          this.faceDetectionBootstrapped = true;
-          void this.ensureBlazeFaceAndStartLoop();
-        };
-
-        video.onloadeddata = () => this.ngZone.run(() => tryStart());
-        video.onplaying = () => this.ngZone.run(() => tryStart());
-        video.oncanplay = () => this.ngZone.run(() => tryStart());
-
-        try {
-          await video.play();
-        } catch {
-          /* play() can fail until metadata; events above still fire */
-        }
-
-        // Fallback if events do not fire (some browsers / policies)
-        setTimeout(() => this.ngZone.run(() => tryStart()), 300);
-        setTimeout(() => this.ngZone.run(() => tryStart()), 800);
+        return;
       }
+
+      video.srcObject = this.cameraStream;
+      this.setBanner(
+        'info',
+        'Camera running',
+        'Align your face in the oval, then click Capture (or hold steady for auto-capture).'
+      );
+
+      const tryStart = () => {
+        if (this.autoCaptureComplete || this.registerForm.imageBase64?.trim()) {
+          return;
+        }
+        if (this.faceDetectionBootstrapped) {
+          return;
+        }
+        this.faceDetectionBootstrapped = true;
+        void this.ensureBlazeFaceAndStartLoop();
+      };
+
+      const markLive = () => {
+        this.ngZone.run(() => {
+          this.cameraOn = true;
+        });
+      };
+      video.onloadeddata = () => {
+        markLive();
+        this.ngZone.run(() => tryStart());
+      };
+      video.onplaying = () => {
+        markLive();
+        this.ngZone.run(() => tryStart());
+      };
+      video.oncanplay = () => {
+        markLive();
+        this.ngZone.run(() => tryStart());
+      };
+
+      try {
+        await video.play();
+      } catch {
+        /* play() can fail until metadata; events above still fire */
+      }
+
+      setTimeout(() => this.ngZone.run(() => tryStart()), 300);
+      setTimeout(() => this.ngZone.run(() => tryStart()), 800);
     } catch {
-      this.faceScanStatus = 'off';
+      this.releaseCameraStream();
+      this.cameraOn = false;
+      this.faceScanStatus = 'error';
       this.setBanner(
         'warn',
         'Camera blocked',
-        'Enable camera permission for this origin in the browser, then Open camera again.'
+        'Allow camera access for this site in the browser (address bar icon), then open Webcam again.'
       );
+    } finally {
+      this.cameraStarting = false;
     }
   }
 
   stopCamera(): void {
+    this.cameraStarting = false;
     this.cancelFaceDetectionLoop();
     this.faceDetectionBootstrapped = false;
     this.faceScanStatus = 'off';
     this.blazefaceModel?.dispose();
     this.blazefaceModel = null;
-    this.cameraStream?.getTracks().forEach((t) => t.stop());
-    this.cameraStream = undefined;
+    this.releaseCameraStream();
     this.cameraOn = false;
   }
 
-  /** Manual fallback if auto-capture fails or user prefers to trigger capture. */
+  /** Capture current webcam frame into the photo preview area (webcam flow only). */
   captureFaceManual(): void {
+    if (this.deviceCaptureDialogOpen || this.deviceCaptureInFlight) {
+      this.setBanner('info', 'Device capture in progress', 'Finish or cancel device enrollment first.');
+      return;
+    }
+    this.enrollmentMode = 'web';
     this.captureFace(false);
   }
 
@@ -381,17 +475,328 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
-    const detail = fromAuto
-      ? 'Captured automatically. Submit when gateway and terminal are online.'
-      : 'Submit registration when both device status lines show Online.';
-
     this.ngZone.run(() => {
-      this.autoCaptureComplete = true;
-      this.faceScanStatus = 'done';
-      this.capturedPreview = dataUrl;
-      this.registerForm.imageBase64 = dataUrl;
-      this.setBanner('success', 'Frame stored', detail);
+      this.stopCamera();
+      this.webcamPanelOpen = false;
+      this.applyWebPhoto(
+        dataUrl,
+        fromAuto
+          ? 'Captured automatically. Submit when gateway and terminal are online.'
+          : 'Photo captured. Submit registration when both device status lines show Online.'
+      );
     });
+  }
+
+  get hasEnrollmentPhoto(): boolean {
+    return !!this.capturedPreview;
+  }
+
+  openUploadPicker(): void {
+    this.photoFileInput?.nativeElement.click();
+  }
+
+  onPhotoFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      this.setBanner('warn', 'Invalid file', 'Choose a JPEG or PNG image.');
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      this.setBanner('warn', 'File too large', 'Use an image under 12 MB.');
+      return;
+    }
+
+    this.photoUploadLoading = true;
+    this.capturedPreview = '';
+    this.registerForm.imageBase64 = '';
+
+    void this.prepareUploadedImage(file)
+      .then((dataUrl) => {
+        this.ngZone.run(() => {
+          this.applyWebPhoto(dataUrl, 'Uploaded image ready. Submit when gateway and terminal are online.');
+          this.photoUploadLoading = false;
+        });
+      })
+      .catch(() => {
+        this.ngZone.run(() => {
+          this.photoUploadLoading = false;
+          this.setBanner('error', 'Upload failed', 'Could not process the selected image. Try a JPEG or PNG file.');
+        });
+      });
+  }
+
+  /** Downscale and compress uploads — phone photos are often 3000px+ and slow as raw base64. */
+  private async prepareUploadedImage(file: File): Promise<string> {
+    const maxEdge = this.uploadMaxEdgePx;
+
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(file);
+        try {
+          const { width, height } = this.fitWithin(bitmap.width, bitmap.height, maxEdge);
+          return this.encodeBitmapToJpegDataUrl(bitmap, width, height);
+        } finally {
+          bitmap.close();
+        }
+      } catch {
+        /* fall through to object-URL path */
+      }
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const img = await this.loadImageElement(objectUrl);
+      const { width, height } = this.fitWithin(img.naturalWidth, img.naturalHeight, maxEdge);
+      return this.encodeImageElementToJpegDataUrl(img, width, height);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  private fitWithin(width: number, height: number, maxEdge: number): { width: number; height: number } {
+    if (width <= 0 || height <= 0) {
+      return { width: maxEdge, height: maxEdge };
+    }
+    if (width <= maxEdge && height <= maxEdge) {
+      return { width, height };
+    }
+    const scale = maxEdge / Math.max(width, height);
+    return {
+      width: Math.round(width * scale),
+      height: Math.round(height * scale)
+    };
+  }
+
+  private loadImageElement(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('decode failed'));
+      img.src = src;
+    });
+  }
+
+  private encodeBitmapToJpegDataUrl(bitmap: ImageBitmap, width: number, height: number): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('canvas unavailable');
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', this.uploadJpegQuality);
+  }
+
+  private encodeImageElementToJpegDataUrl(img: HTMLImageElement, width: number, height: number): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('canvas unavailable');
+    }
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', this.uploadJpegQuality);
+  }
+
+  resetPhoto(): void {
+    this.photoUploadLoading = false;
+    this.stopCamera();
+    this.webcamPanelOpen = false;
+    this.enrollmentMode = 'web';
+    this.deviceCaptureComplete = false;
+    this.autoCaptureComplete = false;
+    this.faceScanStatus = 'off';
+    this.capturedPreview = '';
+    this.registerForm.imageBase64 = '';
+    this.setBanner('info', 'Photo cleared', 'Upload a file, use the webcam, or enroll on the face reader.');
+  }
+
+  openDeviceCaptureDialog(): void {
+    const personId = (this.registerForm.personId ?? '').trim();
+    const fullName = (this.registerForm.fullName ?? '').trim();
+    if (!personId || !fullName) {
+      this.setBanner('info', 'Employee details required', 'Enter Person ID and full name before device capture.');
+      return;
+    }
+    if (!this.isFullNamePatternOk(fullName)) {
+      this.setBanner('warn', 'Invalid full name', 'Use letters and spaces only; minimum first name plus surname.');
+      return;
+    }
+    const active = this.activeFaceDevices;
+    if (active.length === 0) {
+      this.setBanner('warn', 'No face reader', 'Register at least one active face reader in administration.');
+      return;
+    }
+
+    // Device capture uses the face reader camera — never the PC webcam.
+    this.stopCamera();
+    this.webcamPanelOpen = false;
+
+    const selected = active.filter((d) => this.deviceAccess[d.id]);
+    this.deviceCaptureDeviceId =
+      selected.length >= 1 ? selected[0].id : active.length === 1 ? active[0].id : active[0]?.id ?? null;
+    this.deviceCaptureDialogOpen = true;
+  }
+
+  closeDeviceCaptureDialog(): void {
+    if (this.deviceCaptureInFlight) {
+      return;
+    }
+    this.deviceCaptureDialogOpen = false;
+  }
+
+  startDeviceCaptureEnrollment(): void {
+    if (this.deviceCaptureDeviceId == null) {
+      this.setBanner('info', 'Select a device', 'Choose the face reader where the employee will stand.');
+      return;
+    }
+    if (this.deviceCaptureInFlight || this.submitInFlight) {
+      return;
+    }
+    if (this.statusLoading || !this.deviceStatus?.middlewareOnline || !this.deviceStatus?.deviceOnline) {
+      this.setBanner('warn', 'Device status not ready', 'Gateway and terminal must be online before device capture.', true);
+      return;
+    }
+    if (!this.validateIndianNameOrReset()) {
+      return;
+    }
+
+    this.enrollmentMode = 'device';
+    this.stopCamera();
+    this.webcamPanelOpen = false;
+    this.capturedPreview = '';
+    this.registerForm.imageBase64 = '';
+    this.banner = null;
+    this.duplicateDialog = null;
+    this.deviceCaptureInFlight = true;
+
+    const deviceId = this.deviceCaptureDeviceId;
+    this.api
+      .registerFace({
+        ...this.registerForm,
+        imageBase64: '',
+        enrollmentMode: 'device',
+        faceDeviceAccess: this.activeFaceDevices.map((d) => ({
+          faceDeviceId: d.id,
+          accessAllowed: d.id === deviceId
+        }))
+      })
+      .subscribe({
+        next: (res) => {
+          this.deviceCaptureInFlight = false;
+          this.deviceCaptureDialogOpen = false;
+          const base =
+            res?.message?.trim() ||
+            'Employee enrolled on the face reader.';
+          if (res?.photoBase64) {
+            this.applyDeviceCapturePhoto(res.photoBase64);
+            this.setBanner(
+              'success',
+              'Device capture complete',
+              base + ' The enrolled face is shown in the photo area above.'
+            );
+          } else {
+            this.setBanner(
+              'success',
+              'Device enrollment complete',
+              base + ' Photo preview was not returned from the terminal; enrollment may still be saved on the device.'
+            );
+          }
+        },
+        error: (err) => this.handleRegistrationError(err, () => {
+          this.deviceCaptureInFlight = false;
+        })
+      });
+  }
+
+  private applyWebPhoto(dataUrl: string, successDetail: string): void {
+    this.enrollmentMode = 'web';
+    this.deviceCaptureComplete = false;
+    this.autoCaptureComplete = true;
+    this.faceScanStatus = 'done';
+    this.capturedPreview = dataUrl;
+    this.registerForm.imageBase64 = dataUrl;
+    this.setBanner('success', 'Photo ready', successDetail);
+  }
+
+  private applyDeviceCapturePhoto(photoBase64: string): void {
+    const dataUrl = this.toPreviewDataUrl(photoBase64);
+    this.enrollmentMode = 'device';
+    this.deviceCaptureComplete = true;
+    this.autoCaptureComplete = true;
+    this.faceScanStatus = 'done';
+    this.capturedPreview = dataUrl;
+    this.registerForm.imageBase64 = dataUrl;
+  }
+
+  private toPreviewDataUrl(base64: string): string {
+    const trimmed = (base64 ?? '').trim();
+    if (!trimmed) {
+      return '';
+    }
+    if (trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+    return `data:image/jpeg;base64,${trimmed}`;
+  }
+
+  private handleRegistrationError(
+    err: { status?: number; error?: unknown; message?: string },
+    onFinally?: () => void
+  ): void {
+    if (onFinally) {
+      onFinally();
+    }
+    this.submitInFlight = false;
+    const status = err?.status as number | undefined;
+    const payload = err?.error;
+    const apiMessage =
+      (payload && typeof payload === 'object' && (payload as { message?: string }).message) ||
+      (typeof payload === 'string' ? payload : '') ||
+      (err?.message ? err.message : '');
+    const apiDetail =
+      payload && typeof payload === 'object' ? (payload as { detail?: string }).detail : undefined;
+    const code =
+      payload && typeof payload === 'object' ? (payload as { code?: string }).code : undefined;
+
+    if (status === 409) {
+      this.duplicateConflictUi(code, typeof apiMessage === 'string' ? apiMessage : '');
+      this.setBanner(
+        'warn',
+        'Duplicate enrollment',
+        typeof apiMessage === 'string' ? apiMessage : 'This Person ID is already registered.'
+      );
+      return;
+    }
+
+    if (status === 502 && this.isLikelyDuplicateCardDetail(apiDetail)) {
+      this.duplicateConflictUi('duplicate_card_on_device', '');
+      this.setBanner(
+        'warn',
+        'Duplicate card on controller',
+        'This card number appears to already exist on the selected controller.'
+      );
+      return;
+    }
+
+    if (status === 400 && typeof apiMessage === 'string' && apiMessage.toLowerCase().includes('face device')) {
+      this.setBanner('warn', 'Face reader', apiMessage);
+      return;
+    }
+
+    this.setBanner(
+      'error',
+      'Registration rejected',
+      (typeof apiMessage === 'string' ? apiMessage : '') ||
+        'Non-success from person or photo step (duplicate PersonId, bad image, or device firmware error). Inspect the JSON error from the API and middleware trace logs.'
+    );
   }
 
   private cancelFaceDetectionLoop(): void {
@@ -664,6 +1069,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.api
       .registerFace({
         ...this.registerForm,
+        enrollmentMode: 'web',
         faceDeviceAccess: this.activeFaceDevices.map((d) => ({
           faceDeviceId: d.id,
           accessAllowed: !!this.deviceAccess[d.id]
@@ -680,52 +1086,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             ? ' Custom terminal message was not applied: check that FaceReader_Middleware is running, MainGate device URL matches your reader, and PersonApiPass matches the device password (see API logs).'
             : '';
         this.setBanner('success', 'Registration accepted', base + uiNote);
+        this.resetFormFields();
+        this.applyDefaultFaceDeviceSelection();
       },
-      error: (err) => {
+      error: (err) => this.handleRegistrationError(err, () => {
         this.submitInFlight = false;
-        const status = err?.status as number | undefined;
-        const payload = err?.error;
-        const apiMessage =
-          (payload && typeof payload === 'object' && (payload as { message?: string }).message) ||
-          (typeof payload === 'string' ? payload : '') ||
-          (err?.message ? err.message : '');
-        const apiDetail =
-          payload && typeof payload === 'object' ? (payload as { detail?: string }).detail : undefined;
-        const code =
-          payload && typeof payload === 'object' ? (payload as { code?: string }).code : undefined;
-
-        if (status === 409) {
-          this.duplicateConflictUi(code, typeof apiMessage === 'string' ? apiMessage : '');
-          this.setBanner(
-            'warn',
-            'Duplicate enrollment',
-            typeof apiMessage === 'string' ? apiMessage : 'This Person ID is already registered.'
-          );
-          return;
-        }
-
-        if (status === 502 && this.isLikelyDuplicateCardDetail(apiDetail)) {
-          this.duplicateConflictUi('duplicate_card_on_device', '');
-          this.setBanner(
-            'warn',
-            'Duplicate card on controller',
-            'This card number appears to already exist on the selected controller.'
-          );
-          return;
-        }
-
-        if (status === 400 && typeof apiMessage === 'string' && apiMessage.toLowerCase().includes('face device')) {
-          this.setBanner('warn', 'Face reader', apiMessage);
-          return;
-        }
-
-        this.setBanner(
-          'error',
-          'Registration rejected',
-          apiMessage ||
-            'Non-success from person or photo step (duplicate PersonId, bad image, or device firmware error). Inspect the JSON error from the API and middleware trace logs.'
-        );
-      }
+      })
     });
   }
 
@@ -768,6 +1134,10 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.cancelFaceDetectionLoop();
     this.autoCaptureComplete = false;
     this.faceScanStatus = 'off';
+    this.webcamPanelOpen = false;
+    this.enrollmentMode = 'web';
+    this.deviceCaptureComplete = false;
+    this.photoUploadLoading = false;
     this.registerForm.personId = '';
     this.registerForm.fullName = '';
     this.registerForm.idCardNumber = '';

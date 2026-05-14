@@ -66,7 +66,7 @@ export class ApiService {
   }
 
   registerFace(payload: any) {
-    return this.http.post<{ message?: string; faceDeviceUiApplied?: boolean | null }>(
+    return this.http.post<{ message?: string; faceDeviceUiApplied?: boolean | null; photoBase64?: string | null }>(
       `${this.baseUrl}/registration/face`,
       payload,
       {

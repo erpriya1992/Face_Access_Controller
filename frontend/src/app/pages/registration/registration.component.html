@@ -3,7 +3,7 @@
     <header class="reg-page-header">
       <h1 id="reg-page-title" class="reg-page-title">Employee registration</h1>
       <p class="reg-page-subtitle">
-        Enter employee details, capture a face image, and submit when the gateway and terminal show online.
+        Enter employee details, add a face photo (upload, webcam, or device capture), and submit when the gateway and terminal show online.
       </p>
     </header>
 
@@ -93,13 +93,13 @@
     <div class="reg-workflow">
       <div class="reg-workflow__track">
         <span class="reg-step reg-step--done"><span class="reg-step__n">1</span> Details</span>
-        <span class="reg-step" [class.reg-step--done]="capturedPreview"><span class="reg-step__n">2</span> Face capture</span>
-        <span class="reg-step" [class.reg-step--active]="capturedPreview && !submitBlocked"
+        <span class="reg-step" [class.reg-step--done]="hasEnrollmentPhoto"><span class="reg-step__n">2</span> Face photo</span>
+        <span class="reg-step" [class.reg-step--active]="hasEnrollmentPhoto && !submitBlocked"
           ><span class="reg-step__n">3</span> Submit</span
         >
       </div>
-      <div class="reg-workflow__badge" [class.reg-workflow__badge--ok]="capturedPreview">
-        {{ capturedPreview ? 'Photo captured' : 'Photo not captured' }}
+      <div class="reg-workflow__badge" [class.reg-workflow__badge--ok]="hasEnrollmentPhoto">
+        {{ hasEnrollmentPhoto ? 'Photo ready' : 'Photo not captured' }}
       </div>
     </div>
 
@@ -140,7 +140,7 @@
               <span class="device-access-block__title">Face readers <abbr title="required">*</abbr></span>
               <span class="device-access-block__count">{{ selectedDeviceCount }} of {{ activeFaceDevices.length }} selected</span>
             </div>
-            <p class="field-hint">Check each terminal this employee should use. Profile and face photo sync to every selected reader.</p>
+            <p class="field-hint">For upload/webcam, check each terminal to sync. Device capture enrolls on one reader at a time.</p>
             <ul class="device-access-list">
               <li *ngFor="let d of activeFaceDevices" class="device-access-row">
                 <label class="device-access-row__check">
@@ -167,47 +167,131 @@
 
       <article class="reg-panel reg-panel--camera">
         <header class="reg-panel__head">
-          <h3 class="reg-panel__h">Face capture</h3>
+          <h3 class="reg-panel__h">Employee photo</h3>
           <p class="reg-panel__intro">
-            Open the camera and align with the guide. A photo is captured automatically when a face is detected; use Manual capture if needed.
+            Upload a file, capture from this PC webcam, or enroll directly on the face reader.
           </p>
         </header>
-        <div class="camera-frame">
-          <video #cameraVideo autoplay playsinline muted></video>
-          <div
-            class="face-guide"
-            [class.face-guide--searching]="faceScanStatus === 'scanning' || faceScanStatus === 'align'"
-            [class.face-guide--hold]="faceScanStatus === 'hold'"></div>
-          <span class="camera-frame__badge" *ngIf="cameraOn">REC</span>
+
+        <div class="photo-tabs" role="tablist" aria-label="Photo slots">
+          <button type="button" class="photo-tab photo-tab--active" disabled>Photo 1</button>
+          <button type="button" class="photo-tab photo-tab--disabled" disabled title="Reserved for future use">Photo 2</button>
+          <button type="button" class="photo-tab photo-tab--disabled" disabled title="Reserved for future use">Photo 3</button>
         </div>
-        <p class="face-scan-hint" *ngIf="cameraOn && faceScanHint">{{ faceScanHint }}</p>
-        <canvas #captureCanvas class="hidden"></canvas>
-        <div class="reg-actions">
-          <button type="button" class="btn ghost" (click)="startCamera()" [disabled]="cameraOn">Open camera</button>
-          <button type="button" class="btn solid" (click)="captureFaceManual()" [disabled]="!cameraOn">Manual capture</button>
-          <button type="button" class="btn outline" (click)="stopCamera()" [disabled]="!cameraOn">Close camera</button>
+
+        <div
+          class="photo-slot"
+          [class.photo-slot--filled]="hasEnrollmentPhoto"
+          [class.photo-slot--loading]="photoUploadLoading || deviceCaptureInFlight">
+          <div *ngIf="photoUploadLoading || deviceCaptureInFlight" class="photo-slot__loader" role="status" aria-live="polite">
+            <span class="photo-slot__spinner" aria-hidden="true"></span>
+            <span class="photo-slot__loader-text">{{ deviceCaptureInFlight ? 'Capturing on device…' : 'Preparing photo…' }}</span>
+          </div>
+          <img *ngIf="capturedPreview && !photoUploadLoading && !deviceCaptureInFlight" [src]="capturedPreview" alt="Enrollment photo preview" class="photo-slot__img" />
+          <div *ngIf="!capturedPreview && !photoUploadLoading && !deviceCaptureInFlight" class="photo-slot__placeholder" aria-hidden="true">
+            <span class="photo-slot__silhouette"></span>
+            <span class="photo-slot__hint">No photo yet</span>
+          </div>
+        </div>
+
+        <input
+          #photoFileInput
+          type="file"
+          class="hidden"
+          accept="image/jpeg,image/png,image/webp"
+          (change)="onPhotoFileSelected($event)" />
+
+        <div class="photo-toolbar">
+          <button type="button" class="btn photo-btn" (click)="openUploadPicker()" [disabled]="photoUploadLoading">
+            {{ photoUploadLoading ? 'Preparing…' : 'Upload' }}
+          </button>
+          <button type="button" class="btn photo-btn" (click)="openWebcamPanel()" [disabled]="photoUploadLoading || deviceCaptureInFlight || deviceCaptureDialogOpen || (cameraOn && webcamPanelOpen)">Webcam</button>
+          <button
+            *ngIf="webcamPanelOpen && !deviceCaptureDialogOpen"
+            type="button"
+            class="btn photo-btn photo-btn--capture"
+            (click)="captureFaceManual()"
+            [disabled]="!webcamCaptureReady || photoUploadLoading || deviceCaptureInFlight">
+            {{ cameraStarting ? 'Starting…' : 'Capture' }}
+          </button>
+          <button type="button" class="btn photo-btn" (click)="resetPhoto()" [disabled]="photoUploadLoading || deviceCaptureInFlight || (!hasEnrollmentPhoto && !cameraOn)">Reset</button>
+          <button type="button" class="btn photo-btn photo-btn--accent" (click)="openDeviceCaptureDialog()" [disabled]="photoUploadLoading || deviceCaptureInFlight">Device capture</button>
+        </div>
+
+        <div *ngIf="webcamPanelOpen && !deviceCaptureDialogOpen" class="webcam-panel">
+          <div class="camera-frame">
+            <video #cameraVideo autoplay playsinline muted></video>
+            <div
+              class="face-guide"
+              [class.face-guide--searching]="faceScanStatus === 'scanning' || faceScanStatus === 'align'"
+              [class.face-guide--hold]="faceScanStatus === 'hold'"></div>
+            <span class="camera-frame__badge" *ngIf="cameraOn">REC</span>
+          </div>
+          <p class="face-scan-hint" *ngIf="webcamPanelOpen && (cameraStarting || (cameraOn && faceScanHint))">
+            {{ cameraStarting ? 'Starting camera… allow access if the browser asks.' : faceScanHint }}
+          </p>
+          <canvas #captureCanvas class="hidden"></canvas>
+          <div class="reg-actions reg-actions--capture">
+            <button type="button" class="btn primary capture-btn" (click)="captureFaceManual()" [disabled]="!webcamCaptureReady">
+              {{ cameraStarting ? 'Starting camera…' : 'Capture photo' }}
+            </button>
+            <button type="button" class="btn outline" (click)="stopCamera(); webcamPanelOpen = false" [disabled]="cameraStarting && !cameraOn">Close webcam</button>
+          </div>
         </div>
       </article>
     </div>
 
-    <article class="reg-panel reg-panel--preview" *ngIf="capturedPreview">
-      <header class="reg-panel__head">
-        <h3 class="reg-panel__h">Captured frame</h3>
-        <p class="reg-panel__intro">Frontal, evenly lit shots give the best match rate.</p>
-      </header>
-      <div class="preview-wrap">
-        <img [src]="capturedPreview" alt="Captured face frame" />
+    <div
+      class="reg-modal"
+      *ngIf="deviceCaptureDialogOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="device-capture-title"
+      (click)="closeDeviceCaptureDialog()">
+      <div class="reg-modal__panel reg-modal__panel--wide" (click)="$event.stopPropagation()">
+        <h2 id="device-capture-title" class="reg-modal__title">Device capture</h2>
+        <p class="reg-modal__body">
+          Stand at the selected <strong>face reader</strong> — its camera will capture your face (not this PC webcam).
+          Stay within about 40 cm, face forward, with even lighting, then click <strong>Enroll now</strong>.
+        </p>
+        <p class="device-capture-status-warn" *ngIf="deviceStatus && (!deviceStatus.middlewareOnline || !deviceStatus.deviceOnline)">
+          Gateway or terminal is offline (red status above). Fix connectivity before Enroll now.
+        </p>
+        <label class="device-capture-field">
+          <span>Face reader</span>
+          <select [(ngModel)]="deviceCaptureDeviceId" name="deviceCaptureDevice">
+            <option [ngValue]="null">Select terminal…</option>
+            <option *ngFor="let d of activeFaceDevices" [ngValue]="d.id">{{ d.name }} ({{ d.deviceIp }})</option>
+          </select>
+        </label>
+        <fieldset class="device-capture-enroll">
+          <legend>Enroll type</legend>
+          <label class="device-capture-radio">
+            <input type="radio" name="enrollType" value="face" checked disabled />
+            <span>Face</span>
+          </label>
+          <label class="device-capture-radio device-capture-radio--muted" title="Fingerprint enrollment is not wired in this web app yet">
+            <input type="radio" name="enrollType" value="fingerprint" disabled />
+            <span>Fingerprint (not available)</span>
+          </label>
+        </fieldset>
+        <div class="reg-modal__actions reg-modal__actions--split">
+          <button type="button" class="btn outline" (click)="closeDeviceCaptureDialog()" [disabled]="deviceCaptureInFlight">Cancel</button>
+          <button type="button" class="btn primary" (click)="startDeviceCaptureEnrollment()" [disabled]="deviceCaptureInFlight || deviceCaptureDeviceId == null">
+            {{ deviceCaptureInFlight ? 'Enrolling…' : 'Enroll now' }}
+          </button>
+        </div>
       </div>
-    </article>
+    </div>
 
     <footer class="reg-footer">
       <button type="button" class="btn primary" (click)="registerFace()" [disabled]="submitBlocked || submitInFlight">
         {{ submitInFlight ? 'Submitting…' : 'Submit registration' }}
       </button>
       <ul class="reg-footer__tips">
-        <li>Submit stays disabled until gateway and terminal are <strong>Online</strong>, Person ID and full name are filled, and a face photo is saved (auto or manual).</li>
-        <li>After VLAN or IP changes, run <strong>Refresh status</strong> before submitting.</li>
-        <li>If status stays offline: verify cabling and PoE, then have IT confirm API URL and device IP in server and browser configuration.</li>
+        <li><strong>Webcam:</strong> PC camera only — click Webcam, then Capture.</li>
+        <li><strong>Device capture:</strong> face reader terminal only — click Enroll now (do not use Webcam/Capture).</li>
+        <li>Gateway and terminal must be <strong>Online</strong>. Use <strong>Refresh status</strong> after network changes.</li>
       </ul>
     </footer>
   </div>
