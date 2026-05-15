@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import {
   ApiService,
   FaceDeviceDetailDto,
+  FaceDeviceHealthDto,
   FaceDeviceListDto,
   FaceDeviceProbeDto,
   FaceDeviceSettings,
@@ -54,7 +55,10 @@ export class DeviceRegistrationComponent implements OnInit {
   ];
 
   devices: FaceDeviceListDto[] = [];
+  healthRows: FaceDeviceHealthDto[] = [];
   loading = false;
+  healthLoading = false;
+  retryingDeviceId: number | null = null;
   saving = false;
   probing = false;
   message = '';
@@ -72,6 +76,7 @@ export class DeviceRegistrationComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDevices();
+    this.loadHealth();
   }
 
   private defaultSettings(): FaceDeviceSettings {
@@ -126,6 +131,22 @@ export class DeviceRegistrationComponent implements OnInit {
       error: () => {
         this.loading = false;
         this.setMessage('Could not load registered devices.', 'err');
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  loadHealth(): void {
+    this.healthLoading = true;
+    this.api.getFaceDeviceHealth().subscribe({
+      next: (rows) => {
+        this.healthRows = rows ?? [];
+        this.healthLoading = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.healthRows = [];
+        this.healthLoading = false;
         this.cdr.markForCheck();
       }
     });
@@ -296,6 +317,7 @@ export class DeviceRegistrationComponent implements OnInit {
         this.editingId = null;
         this.form = this.emptyForm();
         this.probeResult = null;
+        this.loadHealth();
         if (normalized.configPushWarning) {
           this.setMessage(`Device saved. ${normalized.configPushWarning}`, 'info');
         } else if (normalized.configPushedToDevice) {
@@ -308,6 +330,23 @@ export class DeviceRegistrationComponent implements OnInit {
       error: (err) => {
         this.saving = false;
         this.setMessage(this.readError(err, 'Save failed.'), 'err');
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  queueRetry(deviceId: number): void {
+    this.retryingDeviceId = deviceId;
+    this.api.retryFaceDeviceConfig(deviceId).subscribe({
+      next: () => {
+        this.retryingDeviceId = null;
+        this.setMessage('Retry queued for device config push.', 'info');
+        this.loadHealth();
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        this.retryingDeviceId = null;
+        this.setMessage(this.readError(err, 'Retry queue failed.'), 'err');
         this.cdr.markForCheck();
       }
     });

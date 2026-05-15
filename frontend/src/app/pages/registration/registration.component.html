@@ -140,7 +140,7 @@
               <span class="device-access-block__title">Face readers <abbr title="required">*</abbr></span>
               <span class="device-access-block__count">{{ selectedDeviceCount }} of {{ activeFaceDevices.length }} selected</span>
             </div>
-            <p class="field-hint">For upload/webcam, check each terminal to sync. Device capture enrolls on one reader at a time.</p>
+            <p class="field-hint">Check each terminal where this employee should get access. Submit registration enrolls to all checked readers.</p>
             <ul class="device-access-list">
               <li *ngFor="let d of activeFaceDevices" class="device-access-row">
                 <label class="device-access-row__check">
@@ -277,10 +277,10 @@
         <h2 id="device-capture-title" class="reg-modal__title">Device capture</h2>
         <p class="reg-modal__body">
           Stand at the selected <strong>face reader</strong> — its camera will capture your face (not this PC webcam).
-          Stay within about 40 cm, face forward, with even lighting, then click <strong>Enroll now</strong>.
+          Stay within about 40 cm, face forward, with even lighting, then click <strong>Capture now</strong>.
         </p>
         <p class="device-capture-status-warn" *ngIf="deviceStatus && (!deviceStatus.middlewareOnline || !deviceStatus.deviceOnline)">
-          Gateway or terminal is offline (red status above). Fix connectivity before Enroll now.
+          Gateway or terminal is offline (red status above). Fix connectivity before Capture now.
         </p>
         <label class="device-capture-field">
           <span>Face reader</span>
@@ -303,7 +303,7 @@
         <div class="reg-modal__actions reg-modal__actions--split">
           <button type="button" class="btn outline" (click)="closeDeviceCaptureDialog()" [disabled]="deviceCaptureInFlight">Cancel</button>
           <button type="button" class="btn primary" (click)="startDeviceCaptureEnrollment()" [disabled]="deviceCaptureInFlight || deviceCaptureDeviceId == null">
-            {{ deviceCaptureInFlight ? 'Enrolling…' : 'Enroll now' }}
+            {{ deviceCaptureInFlight ? 'Capturing…' : 'Capture now' }}
           </button>
         </div>
       </div>
@@ -315,7 +315,7 @@
       </button>
       <ul class="reg-footer__tips">
         <li><strong>Webcam:</strong> PC camera only — click Webcam, then Capture.</li>
-        <li><strong>Device capture:</strong> face reader terminal only — click Enroll now (do not use Webcam/Capture).</li>
+        <li><strong>Device capture:</strong> capture photo from face reader first, then click <strong>Submit registration</strong> to enroll all checked readers.</li>
         <li>Gateway and terminal must be <strong>Online</strong>. Use <strong>Refresh status</strong> after network changes.</li>
       </ul>
     </footer>

@@ -11,7 +11,7 @@ namespace FaceAccessController.Api.Controllers;
 [ApiController]
 [Route("api/face-devices")]
 [Authorize]
-public class FaceDevicesController(AppDbContext db, MiddlewareClient middleware) : ControllerBase
+public class FaceDevicesController(AppDbContext db, MiddlewareClient middleware, DeviceConfigPushQueue pushQueue) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -42,6 +42,25 @@ public class FaceDevicesController(AppDbContext db, MiddlewareClient middleware)
 
         var result = await middleware.ProbeDeviceAsync(body.DeviceIp, ct);
         return Ok(result);
+    }
+
+    [HttpGet("health")]
+    public async Task<IActionResult> Health(CancellationToken ct)
+    {
+        var rows = await pushQueue.BuildHealthAsync(ct);
+        return Ok(rows);
+    }
+
+    [HttpPost("{id:int}/retry-config")]
+    public async Task<IActionResult> RetryConfig([FromRoute] int id, CancellationToken ct)
+    {
+        var ok = await pushQueue.EnqueueFromDeviceIdAsync(id, ct);
+        if (!ok)
+        {
+            return BadRequest(new { message = "Device not found or password missing." });
+        }
+
+        return Ok(new { message = "Retry queued." });
     }
 
     [HttpPost]
@@ -135,6 +154,17 @@ public class FaceDevicesController(AppDbContext db, MiddlewareClient middleware)
             password,
             FaceDeviceConfigMapper.ToDeviceUiConfig(entity, settings),
             ct);
+
+        if (!push.Success)
+        {
+            await pushQueue.EnqueueAsync(
+                entity.Id,
+                entity.DeviceIp,
+                password,
+                FaceDeviceConfigMapper.ToDeviceUiConfig(entity, settings),
+                push.Warning,
+                ct);
+        }
 
         return new FaceDeviceSaveResultDto(detail, push.Success, push.Warning);
     }

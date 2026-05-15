@@ -17,6 +17,96 @@ public class RegistrationController(
     ILogger<RegistrationController> logger,
     IConfiguration configuration) : ControllerBase
 {
+    [HttpPost("face/device-capture-preview")]
+    public async Task<IActionResult> DeviceCapturePreview([FromBody] DeviceCapturePreviewRequest request, CancellationToken ct)
+    {
+        if (request is null)
+        {
+            return BadRequest("Request body is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PersonId) || string.IsNullOrWhiteSpace(request.FullName))
+        {
+            return BadRequest("PersonId and FullName are required.");
+        }
+
+        var chosen = await db.FaceDevices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.FaceDeviceId && x.IsActive, ct);
+        if (chosen is null)
+        {
+            return BadRequest(new { message = "Invalid or inactive face device." });
+        }
+
+        var personId = request.PersonId.Trim();
+        var createdOnDevice = false;
+        try
+        {
+            var existsOnDevice = await middlewareClient.PersonExistsOnDeviceAsync(personId, ct, chosen.DeviceIp);
+            if (existsOnDevice)
+            {
+                return Conflict(new
+                {
+                    code = "duplicate_on_device",
+                    message = $"This Person ID is already enrolled on face reader \"{chosen.Name}\" ({chosen.DeviceIp})."
+                });
+            }
+
+            await middlewareClient.CreatePersonAsync(
+                new RegisterFaceRequest
+                {
+                    PersonId = personId,
+                    FullName = request.FullName.Trim()
+                },
+                ct,
+                chosen.DeviceIp);
+            createdOnDevice = true;
+
+            await middlewareClient.CreatePhotoOnDeviceCaptureAsync(personId, ct, chosen.DeviceIp);
+            var faceId = await middlewareClient.WaitForFaceIdOnDeviceAsync(personId, ct, chosen.DeviceIp);
+            if (string.IsNullOrWhiteSpace(faceId))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "The terminal did not report a face template in time. Ask the employee to complete face capture on the reader, then try again."
+                });
+            }
+
+            var photoBase64 = await middlewareClient.TryGetPhotoBase64FromDeviceAsync(personId, ct, chosen.DeviceIp);
+            if (string.IsNullOrWhiteSpace(photoBase64))
+            {
+                return BadRequest(new
+                {
+                    message = "Face was captured on the terminal, but preview photo could not be read. Try again with better lighting."
+                });
+            }
+
+            return Ok(new
+            {
+                message = "Face captured on selected reader. Click Submit registration to enroll to all checked readers.",
+                photoBase64
+            });
+        }
+        catch (HttpRequestException ex)
+        {
+            return await HandleMiddlewareErrorAsync(ex, personId);
+        }
+        finally
+        {
+            if (createdOnDevice)
+            {
+                try
+                {
+                    await middlewareClient.DeletePersonOnDeviceAsync(personId, ct, chosen.DeviceIp);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Device-capture preview cleanup failed for {PersonId} on {DeviceIp}", personId, chosen.DeviceIp);
+                }
+            }
+        }
+    }
+
     [HttpPost("face")]
     public async Task<IActionResult> RegisterFace([FromBody] RegisterFaceRequest request, CancellationToken ct)
     {

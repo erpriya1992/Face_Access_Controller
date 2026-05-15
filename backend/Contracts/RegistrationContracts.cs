@@ -28,6 +28,13 @@ public sealed class FaceDeviceAccessSelection
     public bool AccessAllowed { get; set; }
 }
 
+public sealed class DeviceCapturePreviewRequest
+{
+    public string PersonId { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public int FaceDeviceId { get; set; }
+}
+
 /// <summary>Replace face photo for an existing employee already enrolled on the terminal.</summary>
 public class ReplaceFaceRequest : RegisterFaceRequest
 {

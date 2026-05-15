@@ -65,9 +65,27 @@ export class ApiService {
     return this.http.post<FaceDeviceSaveResult>(`${this.baseUrl}/face-devices`, payload, { headers: this.authHeaders() });
   }
 
+  getFaceDeviceHealth() {
+    return this.http.get<FaceDeviceHealthDto[]>(`${this.baseUrl}/face-devices/health`, { headers: this.authHeaders() });
+  }
+
+  retryFaceDeviceConfig(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/face-devices/${id}/retry-config`, {}, { headers: this.authHeaders() });
+  }
+
   registerFace(payload: any) {
     return this.http.post<{ message?: string; faceDeviceUiApplied?: boolean | null; photoBase64?: string | null }>(
       `${this.baseUrl}/registration/face`,
+      payload,
+      {
+        headers: this.authHeaders()
+      }
+    );
+  }
+
+  deviceCapturePreview(payload: { personId: string; fullName: string; faceDeviceId: number }) {
+    return this.http.post<{ message?: string; photoBase64?: string | null }>(
+      `${this.baseUrl}/registration/face/device-capture-preview`,
       payload,
       {
         headers: this.authHeaders()
@@ -329,6 +347,18 @@ export interface FaceDeviceProbeDto {
   reachable: boolean;
   deviceKey?: string | null;
   detail?: string | null;
+}
+
+export interface FaceDeviceHealthDto {
+  id: number;
+  name: string;
+  deviceIp: string;
+  isActive: boolean;
+  reachable: boolean;
+  probeDetail?: string | null;
+  pendingConfigRetries: number;
+  lastConfigPushAtUtc?: string | null;
+  lastConfigPushError?: string | null;
 }
 
 export interface HourlyAccessItem {

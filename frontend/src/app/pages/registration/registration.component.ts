@@ -63,7 +63,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   activePhotoSlot = 1;
   /** web = upload/webcam image; device = capture on the face reader terminal. */
   enrollmentMode: EnrollmentMode = 'web';
-  /** Set after a successful device-capture enrollment (no local image required). */
+  /** Set after a successful device-capture preview from reader camera. */
   deviceCaptureComplete = false;
   deviceCaptureDialogOpen = false;
   deviceCaptureDeviceId: number | null = null;
@@ -684,14 +684,10 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
     const deviceId = this.deviceCaptureDeviceId;
     this.api
-      .registerFace({
-        ...this.registerForm,
-        imageBase64: '',
-        enrollmentMode: 'device',
-        faceDeviceAccess: this.activeFaceDevices.map((d) => ({
-          faceDeviceId: d.id,
-          accessAllowed: d.id === deviceId
-        }))
+      .deviceCapturePreview({
+        personId: this.registerForm.personId.trim(),
+        fullName: this.registerForm.fullName.trim(),
+        faceDeviceId: deviceId
       })
       .subscribe({
         next: (res) => {
@@ -699,19 +695,19 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           this.deviceCaptureDialogOpen = false;
           const base =
             res?.message?.trim() ||
-            'Employee enrolled on the face reader.';
+            'Face captured on selected reader.';
           if (res?.photoBase64) {
             this.applyDeviceCapturePhoto(res.photoBase64);
             this.setBanner(
               'success',
               'Device capture complete',
-              base + ' The enrolled face is shown in the photo area above.'
+              base + ' The captured face is shown above. Click Submit registration to enroll on checked readers.'
             );
           } else {
             this.setBanner(
-              'success',
-              'Device enrollment complete',
-              base + ' Photo preview was not returned from the terminal; enrollment may still be saved on the device.'
+              'warn',
+              'Device capture incomplete',
+              base + ' Photo preview was not returned from the terminal.'
             );
           }
         },
@@ -1123,7 +1119,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const indianNamePattern = /^[A-Za-z]+(?:\s+[A-Za-z]+)+$/;
 
     if (!indianNamePattern.test(fullName)) {
-      this.resetFormFields();
       this.setBanner(
         'warn',
         'Invalid full name',

@@ -35,6 +35,8 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<DataSeeder>();
+builder.Services.AddSingleton<DeviceConfigPushQueue>();
+builder.Services.AddHostedService<DeviceConfigPushRetryWorker>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is missing.");
 builder.Services
@@ -144,6 +146,28 @@ using (var scope = app.Services.CreateScope())
             BEGIN
                 ALTER TABLE Employees ADD CONSTRAINT FK_Employees_FaceDevices_FaceDeviceId
                     FOREIGN KEY (FaceDeviceId) REFERENCES FaceDevices(Id) ON DELETE SET NULL;
+            END
+            IF OBJECT_ID(N'dbo.DeviceConfigPushJobs', N'U') IS NULL
+            BEGIN
+                CREATE TABLE DeviceConfigPushJobs (
+                    Id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    FaceDeviceId int NULL,
+                    DeviceIp nvarchar(500) NOT NULL,
+                    DevicePassword nvarchar(200) NOT NULL,
+                    ConfigJson nvarchar(max) NOT NULL,
+                    Status nvarchar(40) NOT NULL,
+                    AttemptCount int NOT NULL CONSTRAINT DF_DeviceConfigPushJobs_AttemptCount DEFAULT (0),
+                    LastError nvarchar(max) NULL,
+                    CreatedAtUtc datetime2 NOT NULL,
+                    UpdatedAtUtc datetime2 NOT NULL,
+                    LastAttemptAtUtc datetime2 NULL,
+                    LastSuccessAtUtc datetime2 NULL,
+                    NextAttemptAtUtc datetime2 NULL
+                );
+                CREATE INDEX IX_DeviceConfigPushJobs_Status_NextAttemptAtUtc
+                    ON DeviceConfigPushJobs (Status, NextAttemptAtUtc);
+                CREATE INDEX IX_DeviceConfigPushJobs_FaceDeviceId
+                    ON DeviceConfigPushJobs (FaceDeviceId);
             END
             """);
         await EnsureDefaultFaceDeviceAsync(db, builder.Configuration);

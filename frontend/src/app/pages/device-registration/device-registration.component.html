@@ -221,7 +221,7 @@
 
   <div class="toolbar toolbar--card">
     <span class="toolbar-title">Registered devices ({{ devices.length }})</span>
-    <button type="button" class="btn secondary" (click)="loadDevices()" [disabled]="loading">Refresh</button>
+    <button type="button" class="btn secondary" (click)="loadDevices(); loadHealth()" [disabled]="loading || healthLoading">Refresh</button>
   </div>
 
   <p class="loading" *ngIf="loading">Loading devices…</p>
@@ -258,6 +258,52 @@
           </tr>
           <tr *ngIf="devices.length === 0">
             <td colspan="7" class="empty">No devices registered yet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toolbar toolbar--card">
+    <span class="toolbar-title">Device health and retry queue</span>
+  </div>
+  <p class="loading" *ngIf="healthLoading">Checking device health...</p>
+  <div class="panel panel--table" *ngIf="!healthLoading">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Device</th>
+            <th>IP</th>
+            <th>Reachability</th>
+            <th>Pending retries</th>
+            <th>Last push</th>
+            <th>Last error</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of healthRows; let i = index" [class.row-alt]="i % 2 === 1">
+            <td>{{ h.name }}</td>
+            <td class="cell-mono">{{ h.deviceIp }}</td>
+            <td>
+              <span class="badge" [class.badge--ok]="h.reachable" [class.badge--blocked]="!h.reachable">
+                {{ h.reachable ? 'Online' : 'Offline' }}
+              </span>
+            </td>
+            <td>{{ h.pendingConfigRetries }}</td>
+            <td>{{ h.lastConfigPushAtUtc ? (h.lastConfigPushAtUtc | date:'short') : '-' }}</td>
+            <td class="cell-muted">{{ h.lastConfigPushError || '-' }}</td>
+            <td class="cell-actions">
+              <button type="button" class="btn secondary btn--compact"
+                (click)="queueRetry(h.id)"
+                [disabled]="retryingDeviceId === h.id">
+                {{ retryingDeviceId === h.id ? 'Queueing...' : 'Retry push' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="healthRows.length === 0">
+            <td colspan="7" class="empty">No health rows yet.</td>
           </tr>
         </tbody>
       </table>

@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<FaceDevice> FaceDevices => Set<FaceDevice>();
+    public DbSet<DeviceConfigPushJob> DeviceConfigPushJobs => Set<DeviceConfigPushJob>();
     public DbSet<EmployeeFaceDevice> EmployeeFaceDevices => Set<EmployeeFaceDevice>();
     public DbSet<FaceTransaction> Transactions => Set<FaceTransaction>();
 
@@ -38,5 +39,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .IsUnique();
         // Speeds date-range report queries (daily / monthly / hours).
         modelBuilder.Entity<FaceTransaction>().HasIndex(x => x.TransactionTime);
+        modelBuilder.Entity<DeviceConfigPushJob>()
+            .HasIndex(x => new { x.Status, x.NextAttemptAtUtc });
+        modelBuilder.Entity<DeviceConfigPushJob>()
+            .HasIndex(x => x.FaceDeviceId);
     }
 }
