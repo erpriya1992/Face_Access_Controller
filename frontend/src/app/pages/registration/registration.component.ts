@@ -53,6 +53,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   /** All devices from API; enrollment dropdown uses active only. */
   faceDevices: FaceDeviceListDto[] = [];
   faceDevicesLoaded = false;
+  /** True when GET /face-devices failed (e.g. 401) — list is empty but not because DB has zero rows. */
+  faceDevicesLoadFailed = false;
   cameraOn = false;
   cameraStarting = false;
   webcamPanelOpen = false;
@@ -180,15 +182,18 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   loadFaceDevices(): void {
+    this.faceDevicesLoadFailed = false;
     this.api.getFaceDevices().subscribe({
       next: (rows) => {
         this.faceDevices = (rows ?? []).map((r) => this.normalizeFaceDevice(r));
         this.faceDevicesLoaded = true;
+        this.faceDevicesLoadFailed = false;
         this.applyDefaultFaceDeviceSelection();
       },
       error: () => {
         this.faceDevices = [];
         this.faceDevicesLoaded = true;
+        this.faceDevicesLoadFailed = true;
       }
     });
   }
@@ -202,7 +207,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       siteControl: (pick('siteControl', 'SiteControl') as string | null | undefined) ?? null,
       deviceIp: String(pick('deviceIp', 'DeviceIp') ?? ''),
       direction: String(pick('direction', 'Direction') ?? 'Entry'),
-      isActive: Boolean(pick('isActive', 'IsActive')),
+      isActive: Boolean(pick('isActive', 'IsActive') ?? true),
       sortOrder: Number(pick('sortOrder', 'SortOrder') ?? 0)
     };
   }

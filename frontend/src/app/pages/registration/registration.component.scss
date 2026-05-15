@@ -640,6 +640,22 @@ select:focus {
   line-height: 1.4;
 }
 
+.device-access-block--notice {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.device-access-block--notice .device-access-block__title {
+  text-transform: none;
+  letter-spacing: normal;
+  color: #92400e;
+  margin-bottom: 0.35rem;
+}
+
+.device-access-block--notice code {
+  font-size: 0.72rem;
+}
+
 .device-access-block {
   grid-column: 1 / -1;
   border: 1px solid #e2e8f0;

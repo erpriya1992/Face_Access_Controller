@@ -162,6 +162,31 @@
               </li>
             </ul>
           </div>
+
+          <div
+            class="device-access-block device-access-block--notice full"
+            *ngIf="faceDevicesLoaded && faceDevicesLoadFailed">
+            <p class="device-access-block__title">Face readers could not be loaded</p>
+            <p class="field-hint">
+              Sign in again, confirm <code>apiBaseUrl</code> in <code>assets/app-config.json</code> points at your API, and that the API is running. The list is hidden when the request fails.
+            </p>
+          </div>
+
+          <div
+            class="device-access-block device-access-block--notice full"
+            *ngIf="faceDevicesLoaded && !faceDevicesLoadFailed && faceDevices.length === 0">
+            <p class="device-access-block__title">No face readers in the database</p>
+            <p class="field-hint">Add controllers under <strong>Device registration</strong> in the menu. The list appears here only after at least one device exists.</p>
+          </div>
+
+          <div
+            class="device-access-block device-access-block--notice full"
+            *ngIf="faceDevicesLoaded && !faceDevicesLoadFailed && faceDevices.length > 0 && activeFaceDevices.length === 0">
+            <p class="device-access-block__title">All face readers are inactive</p>
+            <p class="field-hint">
+              Open <strong>Device registration</strong>, edit each reader, and enable <strong>Active (shown in user enrollment)</strong>. Inactive devices are hidden from this list by design.
+            </p>
+          </div>
         </div>
       </article>
 

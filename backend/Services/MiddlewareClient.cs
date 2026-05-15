@@ -339,7 +339,9 @@ public class MiddlewareClient(HttpClient httpClient, IConfiguration configuratio
         var payload = new MiddlewarePersonCreateRequest
         {
             Pass = _personApiPass,
-            DeviceIp = _faceDeviceIp,
+            // Use per-request device override when provided (multi-device enrollment),
+            // otherwise fall back to configured default device IP.
+            DeviceIp = ResolveDeviceIpForApi(deviceIpOverride) ?? string.Empty,
             Person = personInfo
         };
 
